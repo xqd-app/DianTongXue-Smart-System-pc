@@ -1,0 +1,228 @@
+/* 智慧中台登录：纯色底、无渐变与装饰特效 */
+.login-screen {
+  min-height: 100dvh;
+  min-height: 100svh;
+  width: 100vw;
+  max-width: 100vw;
+  margin-left: calc(50% - 50vw);
+  margin-right: calc(50% - 50vw);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  position: relative;
+  padding: max(24px, env(safe-area-inset-top, 0px)) max(20px, env(safe-area-inset-right, 0px))
+    calc(24px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px));
+  box-sizing: border-box;
+  background: #3b66ff;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-family:
+    system-ui,
+    -apple-system,
+    'PingFang SC',
+    'Hiragino Sans GB',
+    'Microsoft YaHei',
+    'Noto Sans SC',
+    sans-serif;
+}
+
+.login-card {
+  position: relative;
+  width: 88%;
+  max-width: 380px;
+  margin: 0 auto;
+  padding: 8px 0 0;
+  box-sizing: border-box;
+  background: transparent;
+}
+
+.login-logo-wrap {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 22px;
+}
+
+.login-logo {
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  border: 2px solid #2dd4bf;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: #fff;
+}
+
+.login-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.login-title {
+  margin: 0 0 8px;
+  font-size: 26px;
+  font-weight: 700;
+  text-align: center;
+  color: #ffffff;
+  line-height: 1.3;
+  letter-spacing: 0.02em;
+}
+
+.login-sub {
+  margin: 0 0 28px;
+  font-size: 15px;
+  font-weight: 400;
+  text-align: center;
+  color: #ffffff;
+  line-height: 1.55;
+  letter-spacing: 0.02em;
+  opacity: 0.95;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.login-field-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #ffffff;
+  margin-bottom: 8px;
+  letter-spacing: 0.02em;
+}
+
+.login-input-row {
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border-radius: 14px;
+  border: none;
+  overflow: hidden;
+}
+
+.login-input-row:focus-within {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 2px;
+}
+
+.login-input-row input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  font-size: 16px;
+  font-weight: 400;
+  padding: 14px 12px 14px 16px;
+  color: #0f172a;
+  background: transparent;
+  -webkit-text-fill-color: #0f172a;
+}
+
+.login-input-row input::placeholder {
+  color: #94a3b8;
+  font-weight: 400;
+  -webkit-text-fill-color: #94a3b8;
+  opacity: 1;
+}
+
+.login-input-icon {
+  flex-shrink: 0;
+  padding: 0 14px 0 4px;
+  display: flex;
+  align-items: center;
+  color: #7eb8ff;
+}
+
+.login-submit {
+  margin-top: 8px;
+  width: 100%;
+  border: none;
+  border-radius: 14px;
+  padding: 15px 20px;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #3b66ff;
+  -webkit-text-fill-color: #3b66ff;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.login-submit:active:not(:disabled) {
+  opacity: 0.92;
+}
+
+.login-submit:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.login-footer-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20px;
+  gap: 12px;
+}
+
+.login-remember {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 400;
+  color: #ffffff;
+  cursor: pointer;
+  user-select: none;
+}
+
+.login-remember input {
+  width: 17px;
+  height: 17px;
+  accent-color: #ffffff;
+  cursor: pointer;
+}
+
+.login-forgot {
+  font-size: 14px;
+  font-weight: 400;
+  color: #ffffff;
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.login-forgot:hover,
+.login-forgot:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
+.login-error {
+  margin: -4px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: #fecaca;
+  text-align: center;
+}
+
+.login-copy {
+  margin: 28px 0 0;
+  font-size: 12px;
+  font-weight: 400;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 0.02em;
+  line-height: 1.55;
+}

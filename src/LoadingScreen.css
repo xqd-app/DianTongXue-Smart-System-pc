@@ -1,0 +1,43 @@
+.loading-screen {
+  width: 100%;
+  min-height: 100dvh;
+  max-width: 420px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 20px;
+  box-sizing: border-box;
+  background: linear-gradient(145deg, #e2f6f8 0%, #eefbfc 50%, #e8f9fa 100%);
+}
+
+.loading-screen-brand {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #0f172a;
+  margin: 0 0 28px;
+  line-height: 1.2;
+}
+
+.loading-screen-spinner {
+  width: 40px;
+  height: 40px;
+  border: 3px solid rgba(59, 114, 245, 0.2);
+  border-top-color: #3b72f5;
+  border-radius: 50%;
+  animation: loading-screen-spin 0.75s linear infinite;
+}
+
+@keyframes loading-screen-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-screen-hint {
+  margin: 20px 0 0;
+  font-size: 12px;
+  color: #94a3b8;
+}

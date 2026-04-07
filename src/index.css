@@ -1,0 +1,45 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    'SF Pro Text',
+    'PingFang SC',
+    'Microsoft YaHei',
+    sans-serif;
+  font-size: 16px;
+  line-height: 1.55;
+  color: #0f172a;
+  background: linear-gradient(145deg, #e2f6f8 0%, #eefbfc 50%, #e8f9fa 100%);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+#root {
+  min-height: 100dvh;
+  width: 100%;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+}
+
+/* 登录页与主壳统一最大宽度并水平居中 */
+#root > * {
+  width: min(100%, 420px);
+  max-width: 420px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
