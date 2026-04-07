@@ -116,25 +116,36 @@ export async function loginWithPassword(account: string, password: string): Prom
     throw new Error(messageFromJsonBody(body) || res.statusText || `HTTP ${res.status}`)
   }
 
-  if (body && typeof body === 'object') {
-    const o = body as Record<string, unknown>
-    if (o.success === false) {
-      throw new Error(messageFromJsonBody(body) || '登录失败')
-    }
-    const code = o.code
-    if (typeof code === 'number' && code !== 0 && code !== 200) {
-      throw new Error(messageFromJsonBody(body) || '登录失败')
-    }
-    const token =
-      typeof o.token === 'string'
-        ? o.token
-        : typeof o.accessToken === 'string'
-          ? o.accessToken
-          : typeof o.access_token === 'string'
-            ? o.access_token
-            : undefined
-    return token ? { token } : {}
+  if (!body || typeof body !== 'object') {
+    throw new Error('登录响应无效')
   }
 
-  return {}
+  const o = body as Record<string, unknown>
+  if (o.success === false) {
+    throw new Error(messageFromJsonBody(body) || '登录失败')
+  }
+
+  const code = o.code
+  const codeNum = typeof code === 'number' ? code : typeof code === 'string' ? Number(code) : NaN
+  if (Number.isFinite(codeNum) && codeNum !== 0 && codeNum !== 200) {
+    throw new Error(messageFromJsonBody(body) || '登录失败')
+  }
+
+  const tokenRaw =
+    typeof o.token === 'string'
+      ? o.token
+      : typeof o.accessToken === 'string'
+        ? o.accessToken
+        : typeof o.access_token === 'string'
+          ? o.access_token
+          : undefined
+  const token = tokenRaw?.trim() || ''
+
+  /** 服务端 200 + 空对象曾被误判为成功，必须看到令牌或明确成功标志 */
+  const explicitOk = o.success === true || codeNum === 0 || codeNum === 200
+  if (!token && !explicitOk) {
+    throw new Error(messageFromJsonBody(body) || '登录失败：账号或密码错误，或服务端未返回有效凭证')
+  }
+
+  return token ? { token } : {}
 }

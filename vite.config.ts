@@ -20,8 +20,19 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const base = normalizePublicBase(env.VITE_BASE_PATH)
 
+  const v = env.VITE_SKIP_LOGIN?.trim().toLowerCase()
+  const explicitOn = v === 'true' || v === '1' || v === 'yes'
+  const explicitOff = v === 'false' || v === '0' || v === 'no'
+  // 生产构建绝不通过 define 注入跳过登录（上传服务器须走登录页）
+  // 开发模式默认跳过登录，避免依赖 .env.local（工作区路径含中文时，部分版本 Cursor 无法打开该文件）
+  const injectSkipLogin =
+    mode !== 'production' && (explicitOn || (mode === 'development' && !explicitOff))
+
   return {
     base,
+    ...(injectSkipLogin
+      ? { define: { 'import.meta.env.VITE_SKIP_LOGIN': JSON.stringify('true') } }
+      : {}),
     plugins: [react()],
     // 微信内置 WebView（尤其旧版 Android）对过新的 ES 语法支持差，整包解析失败会白屏
     build: {

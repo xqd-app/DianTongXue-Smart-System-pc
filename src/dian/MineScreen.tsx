@@ -4,7 +4,7 @@ type MineScreenProps = {
 }
 
 export default function MineScreen({ displayName, onLogout }: MineScreenProps) {
-  const label = displayName.trim() || '滇同学'
+  const label = displayName.trim() || '滇同学·智慧中台'
   return (
     <>
       <header className="dian-topbar">
@@ -33,7 +33,7 @@ export default function MineScreen({ displayName, onLogout }: MineScreenProps) {
             <small>›</small>
           </button>
           <button type="button" className="dian-menu-row">
-            关于滇同学
+            关于滇同学·智慧中台
             <small>v0.1</small>
           </button>
         </div>

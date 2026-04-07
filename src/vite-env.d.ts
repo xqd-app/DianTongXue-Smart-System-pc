@@ -27,6 +27,12 @@ interface ImportMetaEnv {
   readonly VITE_SIGN_SECRET?: string
   /** 响应体 AES 密钥，须与服务器一致；仅当接口返回 encrypted 包时需要 */
   readonly VITE_RESPONSE_ENCRYPTION_KEY?: string
+  /**
+   * 为 true/1/yes 时跳过登录页，直接进入首页（仅建议本地 .env）
+   */
+  readonly VITE_SKIP_LOGIN?: string
+  /** 跳过登录时顶栏展示名，默认「访客」 */
+  readonly VITE_SKIP_LOGIN_DISPLAY?: string
 }
 
 interface ImportMeta {

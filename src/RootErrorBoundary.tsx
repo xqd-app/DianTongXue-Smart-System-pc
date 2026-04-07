@@ -25,7 +25,7 @@ export class RootErrorBoundary extends Component<Props, State> {
             padding: '20px 16px',
             boxSizing: 'border-box',
             fontFamily: 'system-ui, PingFang SC, sans-serif',
-            background: 'linear-gradient(145deg, #e2f6f8 0%, #eefbfc 50%, #e8f9fa 100%)',
+            background: '#fff',
             color: '#0f172a',
           }}
         >

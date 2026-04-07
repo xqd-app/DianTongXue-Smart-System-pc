@@ -263,6 +263,17 @@ function parseVarietyRows(r: Record<string, unknown>): FoodVarietyRow[] | undefi
   ) {
     raw = (pdVo as Record<string, unknown>).apprFoproductDetailsList
   }
+  if (!raw && typeof pdVo === 'string' && pdVo.trim().startsWith('{')) {
+    try {
+      const parsed = JSON.parse(pdVo) as unknown
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const list = (parsed as Record<string, unknown>).apprFoproductDetailsList
+        if (Array.isArray(list)) raw = list
+      }
+    } catch {
+      /* ignore */
+    }
+  }
   if (!Array.isArray(raw) || raw.length === 0) return undefined
   const rows: FoodVarietyRow[] = []
   for (let i = 0; i < raw.length; i++) {

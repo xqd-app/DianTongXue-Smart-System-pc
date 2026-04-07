@@ -1,14 +1,15 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type ClipboardEvent,
-  type Dispatch,
-  type SetStateAction,
+  type PointerEvent,
+  type ReactNode,
 } from 'react'
-import { buildLicenseDetailLines, detailHaystack } from './licenseDetailModel'
+import { useNavigate } from 'react-router-dom'
+import { detailHaystack } from './licenseDetailModel'
 import { HAODING_DETAIL_DB, HAODING_VARIETY_ROWS } from './haodingMock'
 import type { LicenseRow } from './scLicenseTypes'
 import {
@@ -27,6 +28,23 @@ import {
   saveEnterpriseContactStatusRemote,
   saveEnterpriseNotesRemote,
 } from './scEnterpriseNoteApi'
+import { safeRandomUuid } from '../utils/safeRandomId'
+import { persistScDetailRowSession } from './scDetailRowSession'
+import { ScEnterpriseEditSheet } from './scEnterpriseEditSheet'
+import ScQuerySearchFilters, {
+  type ScContactFilter,
+  type ScFavoriteFilter,
+  type ScPhoneFilter,
+  type ScRemarkFilter,
+} from './scQuerySearchFilters'
+import {
+  FavoriteStarIcon,
+  isLicenseInFavorites,
+  toggleLicenseFavorite,
+  useScFavoriteSet,
+} from './scEnterpriseFavorites'
+import { ScrollToTopFab } from './ScrollToTopFab'
+import './dian-app.css'
 
 export type { LicenseRow } from './scLicenseTypes'
 
@@ -34,34 +52,102 @@ const SC_SEARCH_DEBOUNCE_MS = 320
 /** 与中台分页一致：每页条数（滚动触底自动加载下一页） */
 const SC_LIST_PAGE_SIZE = 20
 
-const MAX_NOTE_IMAGES = 8
-const MAX_IMAGE_BYTES = Math.floor(2.5 * 1024 * 1024)
+const SC_FLOAT_BALL_STORAGE_KEY = 'dian-sc-float-ball-pos-v1'
+const SC_FLOAT_SHEET_STORAGE_KEY = 'dian-sc-float-sheet-pos-v1'
+const SC_FLOAT_SHEET_SIZE_KEY = 'dian-sc-float-sheet-size-v1'
+const SC_FLOAT_SHEET_WH_KEY = 'dian-sc-float-sheet-wh-v1'
+const SC_FLOAT_BALL_SIZE = 56
+const SC_FLOAT_TABBAR_RESERVE = 72
+const SC_FLOAT_BALL_DOUBLE_TAP_MS = 380
 
-function formatNoteSavedAt(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+/** 搜索浮层尺寸档位：0 较小 · 1 中等 · 2 较大（顶部栏双击循环切换） */
+const SC_FLOAT_SHEET_SIZE_PRESETS = [
+  { wMax: 340, wMargin: 24, hRatio: 0.46, hCap: 400 },
+  { wMax: 400, wMargin: 20, hRatio: 0.62, hCap: 540 },
+  { wMax: 10000, wMargin: 14, hRatio: 0.82, hCap: 680 },
+] as const
+
+const SC_FLOAT_SHEET_SIZE_COUNT = SC_FLOAT_SHEET_SIZE_PRESETS.length
+
+/** 离开 /sc-query（含进详情再返回）后恢复列表滚动位置 */
+const SC_QUERY_SCROLL_STORAGE_KEY = 'dian-sc-query-scroll-y-v1'
+
+/** 搜索框内容是否像完整许可证号（用于提示「是否已收藏」） */
+function looksLikeScLicenseNoInput(raw: string): boolean {
+  const t = raw.replace(/\s/g, '').trim()
+  return t.length >= 14 && /^SC[A-Z0-9]+$/i.test(t)
 }
 
-function fileToDataUrl(file: File): Promise<string | null> {
-  if (!file.type.startsWith('image/')) return Promise.resolve(null)
-  if (file.size > MAX_IMAGE_BYTES) return Promise.resolve(null)
-  return new Promise((resolve) => {
-    const r = new FileReader()
-    r.onload = () => resolve(typeof r.result === 'string' ? r.result : null)
-    r.onerror = () => resolve(null)
-    r.readAsDataURL(file)
-  })
+function clampBallPos(p: { left: number; bottom: number }): { left: number; bottom: number } {
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 360
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 640
+  const margin = 12
+  const maxLeft = Math.max(margin, vw - SC_FLOAT_BALL_SIZE - margin)
+  const maxBottom = Math.max(margin, vh - SC_FLOAT_BALL_SIZE - margin - SC_FLOAT_TABBAR_RESERVE)
+  return {
+    left: Math.min(Math.max(margin, p.left), maxLeft),
+    bottom: Math.min(Math.max(margin, p.bottom), maxBottom),
+  }
 }
 
-type ScQueryScreenProps = {
-  onBack: () => void
+function sheetDimBounds() {
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 360
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 640
+  const maxH = Math.max(200, vh - SC_FLOAT_TABBAR_RESERVE - 20)
+  return {
+    minW: 260,
+    maxW: Math.max(260, vw - 12),
+    minH: 200,
+    maxH,
+  }
+}
+
+function clampSheetDim(dim: { w: number; h: number }): { w: number; h: number } {
+  const b = sheetDimBounds()
+  return {
+    w: Math.min(Math.max(dim.w, b.minW), b.maxW),
+    h: Math.min(Math.max(dim.h, b.minH), b.maxH),
+  }
+}
+
+function sheetDimensions(sizeIdx: number) {
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 360
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 640
+  const i =
+    ((sizeIdx % SC_FLOAT_SHEET_SIZE_COUNT) + SC_FLOAT_SHEET_SIZE_COUNT) % SC_FLOAT_SHEET_SIZE_COUNT
+  const spec = SC_FLOAT_SHEET_SIZE_PRESETS[i]
+  const w = Math.min(spec.wMax, vw - spec.wMargin)
+  const hRaw = Math.min(Math.round(vh * spec.hRatio), spec.hCap)
+  const hMaxByViewport = Math.max(200, vh - SC_FLOAT_TABBAR_RESERVE - 20)
+  const h = Math.max(200, Math.min(hRaw, hMaxByViewport))
+  return clampSheetDim({ w: Math.max(260, w), h })
+}
+
+function clampSheetPos(
+  p: { left: number; bottom: number },
+  dim: { w: number; h: number },
+): { left: number; bottom: number } {
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 360
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 640
+  const { w, h } = dim
+  const margin = 8
+  const minBottom = SC_FLOAT_TABBAR_RESERVE
+  const maxBottom = Math.max(minBottom, vh - h - margin)
+  const maxLeft = Math.max(margin, vw - w - margin)
+  return {
+    left: Math.min(Math.max(margin, p.left), maxLeft),
+    bottom: Math.min(Math.max(minBottom, p.bottom), maxBottom),
+  }
+}
+
+function defaultSheetPosForBall(
+  ball: { left: number; bottom: number },
+  dim: { w: number; h: number },
+): { left: number; bottom: number } {
+  const { w } = dim
+  const left = ball.left + SC_FLOAT_BALL_SIZE / 2 - w / 2
+  const bottom = ball.bottom + SC_FLOAT_BALL_SIZE + 12
+  return clampSheetPos({ left, bottom }, dim)
 }
 
 /** 每条记录对应一页里的一张企业卡片；接口返回多条则自动多卡 */
@@ -355,11 +441,15 @@ function rowHasDialablePhone(row: LicenseRow): boolean {
 
 function ScLicenseEnterpriseCard({
   row,
+  favorited,
+  onToggleFavorite,
   onView,
   onEdit,
   onContactStatusChange,
 }: {
   row: LicenseRow
+  favorited: boolean
+  onToggleFavorite: () => void
   onView: () => void
   onEdit: () => void
   onContactStatusChange: (row: LicenseRow, next: '已联系' | '未联系') => void
@@ -376,7 +466,12 @@ function ScLicenseEnterpriseCard({
       tabIndex={0}
       onClick={(e) => {
         const el = e.target as HTMLElement
-        if (el.closest('a.dian-sc-lic-phone-tel, button.dian-sc-lic-phone, .dian-sc-lic-contact-wrap')) return
+        if (
+          el.closest(
+            'a.dian-sc-lic-phone-tel, button.dian-sc-lic-phone, button.dian-sc-lic-favorite-btn, .dian-sc-lic-contact-wrap',
+          )
+        )
+          return
         onView()
       }}
       onKeyDown={(e) => {
@@ -406,6 +501,18 @@ function ScLicenseEnterpriseCard({
             <span className="dian-sc-lic-tag dian-sc-lic-tag-blue">{row.bizTag}</span>
           </div>
         </div>
+        <button
+          type="button"
+          className={`dian-sc-lic-favorite-btn${favorited ? ' dian-sc-lic-favorite-btn--on' : ''}`}
+          aria-label={favorited ? '取消收藏' : '收藏'}
+          aria-pressed={favorited}
+          onClick={(e) => {
+            e.stopPropagation()
+            onToggleFavorite()
+          }}
+        >
+          <FavoriteStarIcon filled={favorited} />
+        </button>
         {dial ? (
           <a
             href={`tel:${dial.digits}`}
@@ -478,15 +585,6 @@ function ScLicenseEnterpriseCard({
   )
 }
 
-function ScField({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="dian-sc-field">
-      <span className="dian-sc-field-label">{label}</span>
-      <span className={mono ? 'dian-sc-field-value dian-sc-field-mono' : 'dian-sc-field-value'}>{value}</span>
-    </div>
-  )
-}
-
 function EmptyIllus() {
   return (
     <div className="dian-sc-empty-illus" aria-hidden>
@@ -533,10 +631,6 @@ function rowMatchesQuery(row: LicenseRow, q: string): boolean {
   return vh.includes(ql)
 }
 
-type ScPhoneFilter = 'all' | 'has' | 'none'
-type ScRemarkFilter = 'all' | 'has' | 'none'
-type ScContactFilter = 'all' | '已联系' | '未联系'
-
 function rowMatchesScFilters(
   row: LicenseRow,
   f: {
@@ -563,318 +657,7 @@ function rowMatchesScFilters(
   return true
 }
 
-function ScEnterpriseEditSheet({
-  open,
-  companyName,
-  noteText,
-  onNoteTextChange,
-  images,
-  setImages,
-  history,
-  onSave,
-  onCancel,
-  saving,
-}: {
-  open: boolean
-  companyName: string
-  noteText: string
-  onNoteTextChange: (v: string) => void
-  images: string[]
-  setImages: Dispatch<SetStateAction<string[]>>
-  history: EnterpriseNoteEntry[]
-  onSave: () => void
-  onCancel: () => void
-  saving: boolean
-}) {
-  const fileRef = useRef<HTMLInputElement>(null)
-
-  useEffect(() => {
-    if (!open) return undefined
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [open])
-
-  const addFiles = async (files: FileList | File[]) => {
-    const arr = Array.from(files)
-    const urls: string[] = []
-    for (const f of arr) {
-      if (urls.length >= MAX_NOTE_IMAGES) break
-      const url = await fileToDataUrl(f)
-      if (url) urls.push(url)
-    }
-    if (!urls.length) return
-    setImages((prev) => [...prev, ...urls].slice(0, MAX_NOTE_IMAGES))
-  }
-
-  const onPasteImages = async (e: ClipboardEvent<HTMLTextAreaElement>) => {
-    const items = e.clipboardData?.items
-    if (!items?.length) return
-    const urls: string[] = []
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i]
-      if (it.kind === 'file' && it.type.startsWith('image/')) {
-        e.preventDefault()
-        const f = it.getAsFile()
-        if (f) {
-          const url = await fileToDataUrl(f)
-          if (url) urls.push(url)
-        }
-      }
-    }
-    if (!urls.length) return
-    setImages((prev) => [...prev, ...urls].slice(0, MAX_NOTE_IMAGES))
-  }
-
-  if (!open) return null
-
-  return (
-    <div className="dian-sc-edit-root" role="presentation">
-      <button type="button" className="dian-sc-edit-backdrop" aria-label="关闭" onClick={onCancel} />
-      <div
-        className="dian-sc-edit-panel dian-sc-edit-panel--wide"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="dian-sc-edit-title"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="dian-sc-edit-handle" aria-hidden />
-        <h2 id="dian-sc-edit-title" className="dian-sc-edit-title">
-          编辑
-        </h2>
-        <p className="dian-sc-edit-sub">{companyName}</p>
-
-        <label className="dian-sc-edit-label" htmlFor="dian-sc-edit-note">
-          本次跟进内容
-        </label>
-        <textarea
-          id="dian-sc-edit-note"
-          className="dian-sc-edit-textarea dian-sc-edit-textarea--tall"
-          placeholder="填写文字；支持 Ctrl+V 粘贴图片"
-          rows={5}
-          value={noteText}
-          onChange={(e) => onNoteTextChange(e.target.value)}
-          onPaste={onPasteImages}
-        />
-
-        <div className="dian-sc-edit-img-toolbar">
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            multiple
-            className="dian-sc-edit-file"
-            onChange={(e) => {
-              const fl = e.target.files
-              if (fl?.length) void addFiles(fl)
-              e.target.value = ''
-            }}
-          />
-          <button
-            type="button"
-            className="dian-sc-edit-img-btn"
-            onClick={() => fileRef.current?.click()}
-            disabled={images.length >= MAX_NOTE_IMAGES}
-          >
-            添加图片（{images.length}/{MAX_NOTE_IMAGES}）
-          </button>
-        </div>
-
-        {images.length > 0 ? (
-          <div className="dian-sc-edit-img-grid">
-            {images.map((src, idx) => (
-              <div key={`${idx}-${src.slice(0, 24)}`} className="dian-sc-edit-img-cell">
-                <img src={src} alt="" className="dian-sc-edit-img-thumb" />
-                <button
-                  type="button"
-                  className="dian-sc-edit-img-remove"
-                  aria-label="移除图片"
-                  onClick={() => setImages((prev) => prev.filter((_, i) => i !== idx))}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {history.length > 0 ? (
-          <div className="dian-sc-edit-history">
-            <div className="dian-sc-edit-history-title">历史记录</div>
-            <ul className="dian-sc-edit-history-list">
-              {history.map((e) => (
-                <li key={e.id} className="dian-sc-edit-history-item">
-                  <div className="dian-sc-edit-history-time">{formatNoteSavedAt(e.savedAt)}</div>
-                  <div className="dian-sc-edit-history-text">{e.text || (e.images.length ? '（图片）' : '—')}</div>
-                  {e.images.length > 0 ? (
-                    <div className="dian-sc-edit-history-imgs">
-                      {e.images.slice(0, 4).map((src, i) => (
-                        <img key={i} src={src} alt="" className="dian-sc-edit-history-thumb" />
-                      ))}
-                      {e.images.length > 4 ? <span className="dian-sc-edit-history-more">+{e.images.length - 4}</span> : null}
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-
-        <div className="dian-sc-edit-actions">
-          <button type="button" className="dian-sc-edit-btn dian-sc-edit-btn-cancel" onClick={onCancel} disabled={saving}>
-            取消
-          </button>
-          <button type="button" className="dian-sc-edit-btn dian-sc-edit-btn-save" onClick={onSave} disabled={saving}>
-            {saving ? '保存中…' : '保存'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function ScLicenseDetailSheet({
-  row,
-  open,
-  onClose,
-  onEditContact,
-  noteHistory,
-}: {
-  row: LicenseRow | null
-  open: boolean
-  onClose: () => void
-  onEditContact?: () => void
-  noteHistory: EnterpriseNoteEntry[]
-}) {
-  useEffect(() => {
-    if (!open) return undefined
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => {
-      document.body.style.overflow = prev
-    }
-  }, [open])
-
-  const detailLines = useMemo(() => (row ? buildLicenseDetailLines(row) : []), [row])
-
-  if (!open || !row) return null
-
-  const varieties = row.varietyRows ?? []
-
-  return (
-    <div className="dian-sc-detail-root" role="presentation">
-      <button type="button" className="dian-sc-detail-backdrop" aria-label="关闭" onClick={onClose} />
-      <div
-        className="dian-sc-detail-panel"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="dian-sc-detail-title"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="dian-sc-detail-handle" aria-hidden />
-        <header className="dian-sc-detail-head">
-          <h2 id="dian-sc-detail-title" className="dian-sc-detail-title">
-            许可证详情
-          </h2>
-          <p className="dian-sc-detail-entity">{row.companyName}</p>
-        </header>
-        <div className="dian-sc-detail-scroll">
-          <div className="dian-sc-detail-fields">
-            {detailLines.map((line, idx) => {
-              const inner = (
-                <ScField label={line.label} value={line.value} mono={line.mono} />
-              )
-              if (line.featured) {
-                return (
-                  <div key={`${line.label}-${idx}`} className="dian-sc-detail-field-featured">
-                    {inner}
-                  </div>
-                )
-              }
-              return (
-                <div key={`${line.label}-${idx}`} className="dian-sc-detail-field-wrap">
-                  {inner}
-                </div>
-              )
-            })}
-          </div>
-
-          {varieties.length > 0 ? (
-            <div className="dian-sc-detail-varieties">
-              <h3 className="dian-sc-detail-section-title">食品生产许可品种明细表</h3>
-              <div className="dian-sc-varieties-scroll">
-                <table className="dian-sc-varieties-table">
-                  <thead>
-                    <tr>
-                      <th>序号</th>
-                      <th>食品、食品添加剂类别</th>
-                      <th>类别编号</th>
-                      <th>类别名称</th>
-                      <th>品种明细</th>
-                      <th>备注</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {varieties.map((v) => (
-                      <tr key={v.seq}>
-                        <td>{v.seq}</td>
-                        <td>{v.foodCategory}</td>
-                        <td>{v.categoryCode}</td>
-                        <td>{v.categoryName}</td>
-                        <td>{v.varietyDetail}</td>
-                        <td>{v.remark}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : null}
-
-          {noteHistory.length > 0 ? (
-            <div className="dian-sc-detail-notes">
-              <h3 className="dian-sc-detail-section-title">跟进记录</h3>
-              <ul className="dian-sc-detail-notes-list">
-                {noteHistory.slice(0, 30).map((e) => (
-                  <li key={e.id} className="dian-sc-detail-notes-item">
-                    <div className="dian-sc-detail-notes-time">{formatNoteSavedAt(e.savedAt)}</div>
-                    <div className="dian-sc-detail-notes-body">
-                      {e.text ? <p className="dian-sc-detail-notes-text">{e.text}</p> : null}
-                      {e.images.length > 0 ? (
-                        <div className="dian-sc-detail-notes-imgs">
-                          {e.images.map((src, i) => (
-                            <a key={i} href={src} target="_blank" rel="noreferrer" className="dian-sc-detail-notes-img-a">
-                              <img src={src} alt="" className="dian-sc-detail-notes-img" />
-                            </a>
-                          ))}
-                        </div>
-                      ) : null}
-                      {!e.text && e.images.length === 0 ? <p className="dian-sc-detail-notes-text">—</p> : null}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </div>
-        <div className="dian-sc-detail-footer">
-          {onEditContact ? (
-            <button type="button" className="dian-sc-detail-edit-link" onClick={onEditContact}>
-              编辑
-            </button>
-          ) : null}
-          <button type="button" className="dian-sc-detail-close" onClick={onClose}>
-            关闭
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export default function ScQueryScreen({ onBack }: ScQueryScreenProps) {
+export default function ScQueryScreen() {
   const [query, setQuery] = useState('')
   const [debouncedQuery, setDebouncedQuery] = useState('')
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -888,8 +671,45 @@ export default function ScQueryScreen({ onBack }: ScQueryScreenProps) {
   const [filterPhone, setFilterPhone] = useState<ScPhoneFilter>('all')
   const [filterContact, setFilterContact] = useState<ScContactFilter>('all')
   const [filterRemark, setFilterRemark] = useState<ScRemarkFilter>('all')
+  const [filterFavorite, setFilterFavorite] = useState<ScFavoriteFilter>('all')
   const [filterPanelOpen, setFilterPanelOpen] = useState(false)
-  const [viewLicenseNo, setViewLicenseNo] = useState<string | null>(null)
+  const [floatPanelOpen, setFloatPanelOpen] = useState(false)
+  const [ballPos, setBallPos] = useState(() =>
+    typeof window !== 'undefined'
+      ? clampBallPos({ left: window.innerWidth - SC_FLOAT_BALL_SIZE - 16, bottom: 88 })
+      : { left: 280, bottom: 88 },
+  )
+  const [sheetPos, setSheetPos] = useState<{ left: number; bottom: number } | null>(null)
+  const [floatSheetSizeIdx, setFloatSheetSizeIdx] = useState(0)
+  /** 拖边调节后的宽高；为 null 时使用档位 preset */
+  const [floatSheetCustomDim, setFloatSheetCustomDim] = useState<{
+    w: number
+    h: number
+  } | null>(null)
+  const [winSize, setWinSize] = useState(() =>
+    typeof window !== 'undefined'
+      ? { w: window.innerWidth, h: window.innerHeight }
+      : { w: 360, h: 640 },
+  )
+  const sheetHandleLastTapRef = useRef(0)
+  const sheetDragRef = useRef<{
+    pointerId: number
+    startLeft: number
+    startBottom: number
+    originX: number
+    originY: number
+    moved: boolean
+  } | null>(null)
+  const sheetResizeRef = useRef<{
+    pointerId: number
+    kind: 'n' | 'e'
+    startW: number
+    startH: number
+    originX: number
+    originY: number
+    moved: boolean
+  } | null>(null)
+  const navigate = useNavigate()
   const [editLicenseNo, setEditLicenseNo] = useState<string | null>(null)
   const [draftNoteText, setDraftNoteText] = useState('')
   const [draftImages, setDraftImages] = useState<string[]>([])
@@ -902,9 +722,78 @@ export default function ScQueryScreen({ onBack }: ScQueryScreenProps) {
   const [listLoadingMore, setListLoadingMore] = useState(false)
   const [apiCategories, setApiCategories] = useState<string[] | null>(null)
   const [apiAuthorities, setApiAuthorities] = useState<string[] | null>(null)
+  const favoriteSet = useScFavoriteSet()
+
+  useEffect(() => {
+    const title = 'SC查询'
+    const applyTitle = () => {
+      document.title = title
+      const appMeta = document.querySelector('meta[name="application-name"]')
+      appMeta?.setAttribute('content', title)
+      const appleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]')
+      appleMeta?.setAttribute('content', title)
+    }
+    applyTitle()
+    const retryId = window.setTimeout(() => {
+      applyTitle()
+    }, 80)
+    return () => window.clearTimeout(retryId)
+  }, [])
+
+  const scrollRestoreYRef = useRef<number | null>(null)
+  const deferredScrollRestoreDoneRef = useRef(false)
+
+  useLayoutEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(SC_QUERY_SCROLL_STORAGE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as { y?: unknown }
+      const y =
+        typeof parsed?.y === 'number' && Number.isFinite(parsed.y) ? Math.max(0, parsed.y) : null
+      if (y == null) return
+      scrollRestoreYRef.current = y
+      window.scrollTo(0, y)
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  useEffect(() => {
+    const y = scrollRestoreYRef.current
+    if (y == null || deferredScrollRestoreDoneRef.current) return
+    if (listLoading) return
+    deferredScrollRestoreDoneRef.current = true
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        window.scrollTo(0, y)
+      })
+    })
+  }, [listLoading])
+
+  useEffect(() => {
+    return () => {
+      try {
+        sessionStorage.setItem(
+          SC_QUERY_SCROLL_STORAGE_KEY,
+          JSON.stringify({ y: window.scrollY }),
+        )
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    const onPageShow = (e: PageTransitionEvent) => {
+      if (!e.persisted) return
+      const y = scrollRestoreYRef.current
+      if (y != null) window.scrollTo(0, y)
+    }
+    window.addEventListener('pageshow', onPageShow)
+    return () => window.removeEventListener('pageshow', onPageShow)
+  }, [])
 
   const editingRow = editLicenseNo ? rows.find((r) => r.licenseNo === editLicenseNo) : undefined
-  const viewingRow = viewLicenseNo ? rows.find((r) => r.licenseNo === viewLicenseNo) : undefined
 
   const setRowContactStatus = useCallback(async (row: LicenseRow, next: '已联系' | '未联系') => {
     const code: 0 | 1 = next === '已联系' ? 1 : 0
@@ -914,13 +803,15 @@ export default function ScQueryScreen({ onBack }: ScQueryScreenProps) {
     setRows((prev) => prev.map((r) => (r.licenseNo === row.licenseNo ? { ...r, contactStatus: next } : r)))
   }, [])
 
-  const openView = useCallback((licenseNo: string) => {
-    setViewLicenseNo(licenseNo)
-  }, [])
-
-  const closeView = useCallback(() => {
-    setViewLicenseNo(null)
-  }, [])
+  const openView = useCallback(
+    (licenseNo: string) => {
+      const r = rows.find((x) => x.licenseNo === licenseNo)
+      if (!r) return
+      persistScDetailRowSession(licenseNo, r)
+      navigate(`/sc-query/detail/${encodeURIComponent(licenseNo)}`, { state: { row: r } })
+    },
+    [rows, navigate],
+  )
 
   const refreshNoteHistory = useCallback(async (row: LicenseRow) => {
     const list = await fetchEnterpriseNoteHistory(row.enterpriseId, row.licenseNo)
@@ -952,10 +843,7 @@ export default function ScQueryScreen({ onBack }: ScQueryScreenProps) {
     setNoteSaving(true)
     try {
       const newEntry: EnterpriseNoteEntry = {
-        id:
-          typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-            ? crypto.randomUUID()
-            : `n-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+        id: safeRandomUuid(),
         savedAt: new Date().toISOString(),
         text: textT,
         images: [...draftImages],
@@ -994,12 +882,6 @@ export default function ScQueryScreen({ onBack }: ScQueryScreenProps) {
       setNoteSaving(false)
     }
   }, [editLicenseNo, editingRow, draftNoteText, draftImages, refreshNoteHistory])
-
-  useEffect(() => {
-    if (!viewLicenseNo) return
-    const row = rows.find((r) => r.licenseNo === viewLicenseNo)
-    if (row) void refreshNoteHistory(row)
-  }, [viewLicenseNo, rows, refreshNoteHistory])
 
   useEffect(() => {
     const q = query
@@ -1148,8 +1030,15 @@ export default function ScQueryScreen({ onBack }: ScQueryScreenProps) {
     const bySearch = rowsFromApi
       ? rows
       : rows.filter((row) => rowMatchesQuery(row, debouncedQuery.trim()))
-    return bySearch.filter((row) => rowMatchesScFilters(row, scFilter))
-  }, [rows, rowsFromApi, debouncedQuery, scFilter])
+    const bySc = bySearch.filter((row) => rowMatchesScFilters(row, scFilter))
+    if (filterFavorite === 'only') {
+      return bySc.filter((row) => isLicenseInFavorites(favoriteSet, row.licenseNo))
+    }
+    if (filterFavorite === 'none') {
+      return bySc.filter((row) => !isLicenseInFavorites(favoriteSet, row.licenseNo))
+    }
+    return bySc
+  }, [rows, rowsFromApi, debouncedQuery, scFilter, filterFavorite, favoriteSet])
 
   const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null)
   const loadMoreLockRef = useRef(false)
@@ -1187,8 +1076,9 @@ export default function ScQueryScreen({ onBack }: ScQueryScreenProps) {
     if (filterPhone !== 'all') n++
     if (filterContact !== 'all') n++
     if (filterRemark !== 'all') n++
+    if (filterFavorite === 'only' || filterFavorite === 'none') n++
     return n
-  }, [filterFood, filterAuthority, filterPhone, filterContact, filterRemark])
+  }, [filterFood, filterAuthority, filterPhone, filterContact, filterRemark, filterFavorite])
 
   const searchPending = query.trim() !== '' && query.trim() !== debouncedQuery.trim()
 
@@ -1197,171 +1087,429 @@ export default function ScQueryScreen({ onBack }: ScQueryScreenProps) {
     searchInputRef.current?.focus()
   }, [])
 
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(SC_FLOAT_BALL_STORAGE_KEY)
+      if (!raw) return
+      const o = JSON.parse(raw) as { left?: number; bottom?: number }
+      if (typeof o.left === 'number' && typeof o.bottom === 'number') {
+        setBallPos(clampBallPos({ left: o.left, bottom: o.bottom }))
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const sheetLayoutRef = useRef({
+    idx: 0,
+    custom: null as { w: number; h: number } | null,
+  })
+
+  useEffect(() => {
+    let loadedSize = 0
+    try {
+      const rawS = localStorage.getItem(SC_FLOAT_SHEET_SIZE_KEY)
+      if (rawS != null) {
+        const n = Number(JSON.parse(rawS) as unknown)
+        if (n === 0 || n === 1 || n === 2) loadedSize = n
+      }
+    } catch {
+      /* ignore */
+    }
+    setFloatSheetSizeIdx(loadedSize)
+
+    let loadedWh: { w: number; h: number } | null = null
+    try {
+      const rawWh = localStorage.getItem(SC_FLOAT_SHEET_WH_KEY)
+      if (rawWh) {
+        const o = JSON.parse(rawWh) as { w?: unknown; h?: unknown }
+        if (typeof o.w === 'number' && typeof o.h === 'number') {
+          loadedWh = clampSheetDim({ w: o.w, h: o.h })
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    setFloatSheetCustomDim(loadedWh)
+
+    const dim = loadedWh ?? sheetDimensions(loadedSize)
+
+    try {
+      const raw = localStorage.getItem(SC_FLOAT_SHEET_STORAGE_KEY)
+      if (!raw) return
+      const o = JSON.parse(raw) as { left?: number; bottom?: number }
+      if (typeof o.left === 'number' && typeof o.bottom === 'number') {
+        setSheetPos(clampSheetPos({ left: o.left, bottom: o.bottom }, dim))
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  sheetLayoutRef.current = { idx: floatSheetSizeIdx, custom: floatSheetCustomDim }
+
+  useEffect(() => {
+    const onResize = () => {
+      setWinSize({ w: window.innerWidth, h: window.innerHeight })
+      setBallPos((p) => clampBallPos(p))
+      const { idx, custom } = sheetLayoutRef.current
+      const nextCustom = custom ? clampSheetDim(custom) : null
+      if (
+        nextCustom &&
+        custom &&
+        (nextCustom.w !== custom.w || nextCustom.h !== custom.h)
+      ) {
+        setFloatSheetCustomDim(nextCustom)
+      }
+      const dim = nextCustom ?? sheetDimensions(idx)
+      setSheetPos((p) => (p ? clampSheetPos(p, dim) : p))
+    }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  const persistSheetPos = useCallback((p: { left: number; bottom: number }) => {
+    try {
+      localStorage.setItem(SC_FLOAT_SHEET_STORAGE_KEY, JSON.stringify(p))
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const persistSheetWh = useCallback((dim: { w: number; h: number }) => {
+    try {
+      localStorage.setItem(SC_FLOAT_SHEET_WH_KEY, JSON.stringify(clampSheetDim(dim)))
+    } catch {
+      /* ignore */
+    }
+  }, [])
+
+  const floatSheetPanelDim = useMemo(() => {
+    return floatSheetCustomDim
+      ? clampSheetDim(floatSheetCustomDim)
+      : sheetDimensions(floatSheetSizeIdx)
+  }, [floatSheetCustomDim, floatSheetSizeIdx, winSize.w, winSize.h])
+
+  useLayoutEffect(() => {
+    if (!floatPanelOpen || sheetPos != null) return
+    setSheetPos(
+      clampSheetPos(defaultSheetPosForBall(ballPos, floatSheetPanelDim), floatSheetPanelDim),
+    )
+  }, [floatPanelOpen, sheetPos, ballPos, floatSheetPanelDim])
+
+  useEffect(() => {
+    setSheetPos((p) => (p ? clampSheetPos(p, floatSheetPanelDim) : p))
+  }, [floatSheetPanelDim.w, floatSheetPanelDim.h])
+
+  useEffect(() => {
+    if (!floatPanelOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFloatPanelOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [floatPanelOpen])
+
+  const onSheetHandlePointerDown = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0 || sheetPos == null) return
+      sheetDragRef.current = {
+        pointerId: e.pointerId,
+        startLeft: sheetPos.left,
+        startBottom: sheetPos.bottom,
+        originX: e.clientX,
+        originY: e.clientY,
+        moved: false,
+      }
+      e.currentTarget.setPointerCapture(e.pointerId)
+    },
+    [sheetPos],
+  )
+
+  const onSheetHandlePointerMove = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      const d = sheetDragRef.current
+      if (!d || d.pointerId !== e.pointerId) return
+      const dx = e.clientX - d.originX
+      const dy = d.originY - e.clientY
+      if (Math.abs(dx) + Math.abs(dy) > 6) d.moved = true
+      setSheetPos(
+        clampSheetPos(
+          {
+            left: d.startLeft + dx,
+            bottom: d.startBottom + dy,
+          },
+          floatSheetPanelDim,
+        ),
+      )
+    },
+    [floatSheetPanelDim],
+  )
+
+  const onSheetHandlePointerUp = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      const d = sheetDragRef.current
+      if (!d || d.pointerId !== e.pointerId) return
+      sheetDragRef.current = null
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      } catch {
+        /* ignore */
+      }
+      if (d.moved) {
+        setSheetPos((p) => {
+          if (!p) return p
+          const c = clampSheetPos(p, floatSheetPanelDim)
+          persistSheetPos(c)
+          return c
+        })
+      } else {
+        const now = Date.now()
+        if (now - sheetHandleLastTapRef.current < SC_FLOAT_BALL_DOUBLE_TAP_MS) {
+          sheetHandleLastTapRef.current = 0
+          setFloatSheetCustomDim(null)
+          try {
+            localStorage.removeItem(SC_FLOAT_SHEET_WH_KEY)
+          } catch {
+            /* ignore */
+          }
+          setFloatSheetSizeIdx((i) => {
+            const next = (i + 1) % SC_FLOAT_SHEET_SIZE_COUNT
+            try {
+              localStorage.setItem(SC_FLOAT_SHEET_SIZE_KEY, JSON.stringify(next))
+            } catch {
+              /* ignore */
+            }
+            return next
+          })
+        } else {
+          sheetHandleLastTapRef.current = now
+        }
+      }
+    },
+    [floatSheetPanelDim, persistSheetPos],
+  )
+
+  const onSheetResizePointerDown = useCallback(
+    (kind: 'n' | 'e', e: PointerEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return
+      e.stopPropagation()
+      const { w, h } = floatSheetPanelDim
+      sheetResizeRef.current = {
+        pointerId: e.pointerId,
+        kind,
+        startW: w,
+        startH: h,
+        originX: e.clientX,
+        originY: e.clientY,
+        moved: false,
+      }
+      e.currentTarget.setPointerCapture(e.pointerId)
+    },
+    [floatSheetPanelDim],
+  )
+
+  const onSheetResizePointerMove = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    const d = sheetResizeRef.current
+    if (!d || d.pointerId !== e.pointerId) return
+    const dx = e.clientX - d.originX
+    const dy = e.clientY - d.originY
+    if (Math.abs(dx) + Math.abs(dy) > 2) d.moved = true
+    if (d.kind === 'n') {
+      setFloatSheetCustomDim(clampSheetDim({ w: d.startW, h: d.startH - dy }))
+    } else {
+      setFloatSheetCustomDim(clampSheetDim({ w: d.startW + dx, h: d.startH }))
+    }
+  }, [])
+
+  const onSheetResizePointerUp = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      const d = sheetResizeRef.current
+      if (!d || d.pointerId !== e.pointerId) return
+      sheetResizeRef.current = null
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      } catch {
+        /* ignore */
+      }
+      if (d.moved) {
+        const dy = e.clientY - d.originY
+        const dx = e.clientX - d.originX
+        const finalDim =
+          d.kind === 'n'
+            ? clampSheetDim({ w: d.startW, h: d.startH - dy })
+            : clampSheetDim({ w: d.startW + dx, h: d.startH })
+        persistSheetWh(finalDim)
+        setFloatSheetCustomDim(finalDim)
+        setSheetPos((p) => {
+          if (!p) return p
+          const c = clampSheetPos(p, finalDim)
+          persistSheetPos(c)
+          return c
+        })
+      }
+    },
+    [persistSheetPos, persistSheetWh],
+  )
+
+  const dataSourceLine = useMemo(() => {
+    const qStable = debouncedQuery.trim()
+    const qInput = query.trim()
+    const pending = qInput !== '' && qInput !== qStable
+    const favHint =
+      filterFavorite === 'only' ? (
+        <>
+          {' '}
+          · 仅显示已收藏（本地 {favoriteSet.size} 条许可证号）
+        </>
+      ) : filterFavorite === 'none' ? (
+        <> · 仅显示未收藏</>
+      ) : null
+    const licenseCompact = qStable.replace(/\s/g, '').trim()
+    const showFavLookup = looksLikeScLicenseNoInput(qStable) && !pending
+    const licenseFavLookup = showFavLookup ? (
+      <span className="dian-sc-filter-fav-lookup">
+        {' '}
+        · 证号「{licenseCompact}」本地收藏：
+        {isLicenseInFavorites(favoriteSet, licenseCompact) ? '已收藏' : '未收藏'}
+      </span>
+    ) : null
+    if (!rowsFromApi) {
+      return (
+        <p className="dian-sc-filter-datasource" role="status">
+          {qStable ? (
+            <>
+              本地演示 · 关键词「{qStable}」
+              {pending ? (
+                <span className="dian-sc-filter-datasource-pending"> · 等待输入停顿后匹配</span>
+              ) : null}
+            </>
+          ) : (
+            <>本地演示数据</>
+          )}
+          {favHint}
+          {licenseFavLookup}
+        </p>
+      )
+    }
+    return (
+      <p className="dian-sc-filter-datasource" role="status">
+        {listDataSource ? <>数据源：{listDataSource}</> : <>接口列表</>}
+        {qStable ? (
+          <> · 列表按关键词「{qStable}」向中台检索</>
+        ) : (
+          <> · 当前无搜索词（默认分页）</>
+        )}
+        {pending ? (
+          <span className="dian-sc-filter-datasource-pending"> · 输入停顿后提交检索</span>
+        ) : null}
+        {favHint}
+        {licenseFavLookup}
+      </p>
+    )
+  }, [rowsFromApi, listDataSource, debouncedQuery, query, filterFavorite, favoriteSet])
+
+  const searchFiltersShared = useMemo(
+    () => ({
+      query,
+      setQuery,
+      searchInputRef,
+      clearSearchOnDoubleClick,
+      SearchIcon,
+      dataSourceLine,
+      filterPanelOpen,
+      setFilterPanelOpen,
+      filterFood,
+      setFilterFood,
+      filterAuthority,
+      setFilterAuthority,
+      filterPhone,
+      setFilterPhone,
+      filterContact,
+      setFilterContact,
+      filterRemark,
+      setFilterRemark,
+      filterFavorite,
+      setFilterFavorite,
+      filterActiveCount,
+      foodOptions,
+      authorityOptions,
+      setPage,
+    }),
+    [
+      query,
+      clearSearchOnDoubleClick,
+      dataSourceLine,
+      filterPanelOpen,
+      filterFood,
+      filterAuthority,
+      filterPhone,
+      filterContact,
+      filterRemark,
+      filterFavorite,
+      filterActiveCount,
+      foodOptions,
+      authorityOptions,
+    ],
+  )
+
+  const queryResultSummary = useMemo(() => {
+    if (listLoading && rows.length === 0) {
+      return <>正在加载列表…</>
+    }
+    if (listError && rows.length === 0) {
+      return <>暂无列表数据，请检查接口或使用演示数据</>
+    }
+    const nRows = rows.length
+    const nShow = filtered.length
+    const parts: ReactNode[] = []
+    parts.push(
+      <span key="main">
+        搜索到 <span className="dian-sc-query-result-num">{nShow}</span> 条
+      </span>,
+    )
+    if (rowsFromApi && listTotal > 0 && (listTotal !== nShow || nRows < listTotal)) {
+      parts.push(
+        <span key="total">
+          {' '}
+          <span className="dian-sc-query-result-meta-secondary">
+            （列表共 <span className="dian-sc-query-result-num">{listTotal}</span> 条
+            {nRows < listTotal ? (
+              <>
+                ，已加载 <span className="dian-sc-query-result-num">{nRows}</span> 条
+              </>
+            ) : null}
+            ）
+          </span>
+        </span>,
+      )
+    }
+    if (searchPending) {
+      parts.push(<span key="pending"> · 关键词将在输入停顿后生效</span>)
+    }
+    if (listLoadingMore) {
+      parts.push(<span key="loading-more"> · 正在加载更多…</span>)
+    }
+    return <>{parts}</>
+  }, [
+    listLoading,
+    listError,
+    rows.length,
+    filtered.length,
+    rowsFromApi,
+    listTotal,
+    searchPending,
+    listLoadingMore,
+  ])
+
   return (
     <div className="dian-subpage">
-      <div className="dian-subpage-sticky">
-        <header className="dian-subpage-top">
-          <button type="button" className="dian-subpage-back" onClick={onBack} aria-label="返回">
-            <span className="dian-subpage-back-icon" aria-hidden>
-              ‹
-            </span>
-          </button>
-          <div
-            className="dian-sc-search"
-            role="search"
-            onDoubleClick={clearSearchOnDoubleClick}
-            title="双击清空搜索"
-          >
-            <span className="dian-sc-search-icon">
-              <SearchIcon />
-            </span>
-            <input
-              ref={searchInputRef}
-              type="search"
-              className="dian-sc-search-input"
-              placeholder="企业名称、许可证编号、发证机关等"
-              enterKeyHint="search"
-              autoComplete="off"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
-          </div>
-        </header>
-
-        <div className="dian-sc-filter-bar" role="toolbar" aria-label="列表筛选">
-          {listDataSource ? (
-            <p className="dian-sc-filter-datasource" role="status">
-              数据源：{listDataSource}
-            </p>
-          ) : null}
-          <div className={`dian-sc-filter-panel${filterPanelOpen ? ' dian-sc-filter-panel--open' : ''}`}>
-            <button
-              type="button"
-              className="dian-sc-filter-toggle"
-              aria-expanded={filterPanelOpen}
-              aria-controls="dian-sc-filter-grid"
-              id="dian-sc-filter-toggle"
-              onClick={() => setFilterPanelOpen((v) => !v)}
-            >
-              <span className="dian-sc-filter-head-ico" aria-hidden>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M4 6h16M7 12h10M10 18h4" strokeLinecap="round" />
-                </svg>
-              </span>
-              <span className="dian-sc-filter-head-text">
-                <span className="dian-sc-filter-head-row">
-                  <span className="dian-sc-filter-head-title">筛选条件</span>
-                  {filterActiveCount > 0 ? (
-                    <span className="dian-sc-filter-badge" aria-label={`已选 ${filterActiveCount} 项`}>
-                      {filterActiveCount}
-                    </span>
-                  ) : null}
-                </span>
-                <span className="dian-sc-filter-head-hint">{filterPanelOpen ? '轻触收起' : '轻触展开'}</span>
-              </span>
-              <span className="dian-sc-filter-chevron" aria-hidden>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              </span>
-            </button>
-            <div
-              className="dian-sc-filter-animate"
-              aria-hidden={!filterPanelOpen}
-              inert={filterPanelOpen ? undefined : true}
-            >
-              <div id="dian-sc-filter-grid" className="dian-sc-filter-grid">
-              <label className="dian-sc-filter-field" htmlFor="dian-sc-f-food">
-                <span className="dian-sc-filter-label">产品类别</span>
-                <select
-                  id="dian-sc-f-food"
-                  className="dian-sc-filter-select"
-                  value={filterFood}
-                  onChange={(e) => {
-                    setFilterFood(e.target.value)
-                    setPage(1)
-                  }}
-                  title={filterFood || '选择产品类别'}
-                >
-                  <option value="">全部类别</option>
-                  {foodOptions.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="dian-sc-filter-field" htmlFor="dian-sc-f-auth">
-                <span className="dian-sc-filter-label">发证机关</span>
-                <select
-                  id="dian-sc-f-auth"
-                  className="dian-sc-filter-select"
-                  value={filterAuthority}
-                  onChange={(e) => {
-                    setFilterAuthority(e.target.value)
-                    setPage(1)
-                  }}
-                  title={filterAuthority || '选择发证机关'}
-                >
-                  <option value="">全部机关</option>
-                  {authorityOptions.map((opt) => (
-                    <option key={opt} value={opt}>
-                      {opt}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="dian-sc-filter-field" htmlFor="dian-sc-f-phone">
-                <span className="dian-sc-filter-label">手机号码</span>
-                <select
-                  id="dian-sc-f-phone"
-                  className="dian-sc-filter-select"
-                  value={filterPhone}
-                  onChange={(e) => {
-                    setFilterPhone(e.target.value as ScPhoneFilter)
-                    setPage(1)
-                  }}
-                >
-                  <option value="all">全部</option>
-                  <option value="has">有手机</option>
-                  <option value="none">无手机</option>
-                </select>
-              </label>
-              <label className="dian-sc-filter-field" htmlFor="dian-sc-f-contact">
-                <span className="dian-sc-filter-label">联系记录</span>
-                <select
-                  id="dian-sc-f-contact"
-                  className="dian-sc-filter-select"
-                  value={filterContact}
-                  onChange={(e) => {
-                    setFilterContact(e.target.value as ScContactFilter)
-                    setPage(1)
-                  }}
-                >
-                  <option value="all">全部</option>
-                  <option value="已联系">已联系</option>
-                  <option value="未联系">未联系</option>
-                </select>
-              </label>
-              <label className="dian-sc-filter-field dian-sc-filter-field--full" htmlFor="dian-sc-f-remark">
-                <span className="dian-sc-filter-label">备注</span>
-                <select
-                  id="dian-sc-f-remark"
-                  className="dian-sc-filter-select"
-                  value={filterRemark}
-                  onChange={(e) => {
-                    setFilterRemark(e.target.value as ScRemarkFilter)
-                    setPage(1)
-                  }}
-                >
-                  <option value="all">全部</option>
-                  <option value="has">已备注</option>
-                  <option value="none">未备注</option>
-                </select>
-              </label>
-              </div>
-            </div>
-          </div>
+      <div className="dian-sc-query-sticky-head">
+        <p className="dian-sc-query-result-meta" role="status" aria-live="polite">
+          {queryResultSummary}
+        </p>
+        <div className="dian-sc-query-inline-filters" aria-label="搜索与筛选">
+          <ScQuerySearchFilters {...searchFiltersShared} variant="drawer" idSuffix="-inline" hideBack />
         </div>
       </div>
 
@@ -1390,7 +1538,15 @@ export default function ScQueryScreen({ onBack }: ScQueryScreenProps) {
           <div className="dian-sc-result-card">
             <EmptyIllus />
             <p className="dian-sc-empty-title">暂无匹配记录</p>
-            <p className="dian-sc-empty-desc">可尝试调整上方筛选条件或更换搜索关键词。</p>
+            <p className="dian-sc-empty-desc">
+              {filterFavorite === 'only'
+                ? favoriteSet.size === 0
+                  ? '本地尚无收藏。在企业卡片或详情页点击星标即可收藏（数据仅存本机）。'
+                  : '当前已加载的列表中没有已收藏企业，可下滑加载更多、放宽筛选或关闭「仅看收藏」。'
+                : filterFavorite === 'none'
+                  ? '当前已加载的列表中没有符合「未收藏」的企业，或已全部收藏。可放宽筛选或关闭「仅未收藏」。'
+                  : '可点击右下角搜索打开筛选；打开后双击顶部栏可切换搜索窗口大小。'}
+            </p>
           </div>
         ) : (
           <>
@@ -1399,6 +1555,10 @@ export default function ScQueryScreen({ onBack }: ScQueryScreenProps) {
                 <ScLicenseEnterpriseCard
                   key={`${row.licenseNo}-${i}`}
                   row={row}
+                  favorited={isLicenseInFavorites(favoriteSet, row.licenseNo)}
+                  onToggleFavorite={() => {
+                    toggleLicenseFavorite(row.licenseNo)
+                  }}
                   onView={() => openView(row.licenseNo)}
                   onEdit={() => openEdit(row.licenseNo)}
                   onContactStatusChange={setRowContactStatus}
@@ -1409,6 +1569,7 @@ export default function ScQueryScreen({ onBack }: ScQueryScreenProps) {
               <div className="dian-sc-list-footer">
                 <p className="dian-sc-list-meta" role="status">
                   已加载 {rows.length} 条，共 {listTotal} 条
+                  {debouncedQuery.trim() ? ` · 检索「${debouncedQuery.trim()}」` : ''}
                   {hasMore && !listLoadingMore ? ' · 下滑加载更多' : null}
                 </p>
                 {listLoadingMore ? (
@@ -1434,21 +1595,67 @@ export default function ScQueryScreen({ onBack }: ScQueryScreenProps) {
         )}
       </main>
 
-      <ScLicenseDetailSheet
-        row={viewingRow ?? null}
-        open={Boolean(viewLicenseNo && viewingRow)}
-        onClose={closeView}
-        noteHistory={viewingRow ? noteHistoryMap[noteStorageKey(viewingRow)] ?? [] : []}
-        onEditContact={
-          viewLicenseNo
-            ? () => {
-                const id = viewLicenseNo
-                closeView()
-                openEdit(id)
-              }
-            : undefined
-        }
-      />
+      <ScrollToTopFab target="window" />
+
+      {floatPanelOpen && sheetPos ? (
+        <div
+          className="dian-sc-float-sheet-root"
+          role="dialog"
+          aria-modal="false"
+          aria-label="搜索与筛选：顶部栏可拖动移动，双击切换档位；顶边与右侧可拖动调节窗口大小"
+        >
+          <div
+            className="dian-sc-float-sheet-panel"
+            style={{
+              left: sheetPos.left,
+              bottom: sheetPos.bottom,
+              width: floatSheetPanelDim.w,
+              height: floatSheetPanelDim.h,
+            }}
+          >
+            <div
+              className="dian-sc-float-sheet-resize-n"
+              title="拖动调节高度"
+              aria-label="拖动上边缘调节窗口高度"
+              onPointerDown={(e) => onSheetResizePointerDown('n', e)}
+              onPointerMove={onSheetResizePointerMove}
+              onPointerUp={onSheetResizePointerUp}
+              onPointerCancel={onSheetResizePointerUp}
+            />
+            <div
+              className="dian-sc-float-sheet-chrome"
+              title="拖动移动；双击切换档位；顶边与右侧可拖调大小"
+              onPointerDown={onSheetHandlePointerDown}
+              onPointerMove={onSheetHandlePointerMove}
+              onPointerUp={onSheetHandlePointerUp}
+              onPointerCancel={onSheetHandlePointerUp}
+            >
+              <div className="dian-sc-float-sheet-chrome-fill" aria-hidden />
+              <button
+                type="button"
+                className="dian-sc-float-sheet-close"
+                aria-label="关闭"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={() => setFloatPanelOpen(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="dian-sc-float-sheet-scroll">
+              <ScQuerySearchFilters {...searchFiltersShared} variant="drawer" idSuffix="-fl" hideBack />
+            </div>
+            <div
+              className="dian-sc-float-sheet-resize-e"
+              title="拖动调节宽度"
+              aria-label="拖动右边缘调节窗口宽度"
+              onPointerDown={(e) => onSheetResizePointerDown('e', e)}
+              onPointerMove={onSheetResizePointerMove}
+              onPointerUp={onSheetResizePointerUp}
+              onPointerCancel={onSheetResizePointerUp}
+            />
+          </div>
+        </div>
+      ) : null}
 
       <ScEnterpriseEditSheet
         open={Boolean(editLicenseNo && editingRow)}

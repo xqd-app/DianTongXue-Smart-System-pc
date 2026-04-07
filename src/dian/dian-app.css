@@ -18,6 +18,9 @@
 
 .dian-scroll {
   flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
   overflow: auto;
   padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   padding-top: env(safe-area-inset-top, 0px);
@@ -46,9 +49,66 @@
   letter-spacing: 0.02em;
 }
 
+/* 首页等：左返回 + 中标题 + 右更多 */
+.dian-topbar--app {
+  display: grid;
+  grid-template-columns: 44px 1fr 44px;
+  align-items: center;
+  padding: 8px 6px;
+  gap: 4px;
+}
+
+.dian-topbar--app .dian-topbar-title {
+  justify-self: center;
+  text-align: center;
+  font-size: 15px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dian-topbar-app-btn {
+  width: 44px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #0f172a;
+  font-size: 28px;
+  font-weight: 300;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+
+.dian-topbar-app-btn:active {
+  opacity: 0.75;
+}
+
+.dian-topbar-app-more {
+  display: block;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
 /* —— 首页顶区 —— */
 .dian-home-pad {
   padding: 12px 14px 20px;
+}
+
+/* 首页去掉应用顶栏后，略加大顶内边距与安全区衔接 */
+.dian-home-pad--no-app-topbar {
+  padding-top: max(12px, env(safe-area-inset-top, 0px));
 }
 
 .dian-user-row {
@@ -216,6 +276,80 @@
   margin: 0 -14px 6px;
   padding: 0 14px 2px;
   background: linear-gradient(180deg, #eef2f7 90%, rgba(238, 242, 247, 0));
+}
+
+/* SC 查询页：浅冷色铺底（与详情页一致层次） */
+.dian-subpage:has(.dian-sc-query-sticky-head) {
+  background: linear-gradient(165deg, #eef2ff 0%, #f1f5f9 28%, #f8fafc 60%, #ffffff 100%);
+}
+
+/* SC 查询：顶栏 + 结果条数一起吸顶 */
+.dian-sc-query-sticky-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  margin: 0 -14px 8px;
+  padding-bottom: 4px;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, rgba(241, 245, 249, 0.92) 0%, rgba(241, 245, 249, 0.88) 70%, rgba(248, 250, 252, 0));
+  -webkit-backdrop-filter: blur(10px) saturate(1.05);
+  backdrop-filter: blur(10px) saturate(1.05);
+}
+
+/* SC 查询：仅保留返回，搜索与筛选改由右下角浮层；标题相对整栏居中 */
+.dian-sc-query-min-top {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  padding: 4px 14px 2px;
+  min-height: 48px;
+  box-sizing: border-box;
+}
+
+.dian-sc-query-result-meta {
+  margin: 0;
+  padding: 2px 14px 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #64748b;
+  letter-spacing: 0.01em;
+  text-align: center;
+}
+
+.dian-sc-query-result-meta-secondary {
+  font-weight: 400;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+/* SC 查询：把搜索与筛选固定在结果条数下方 */
+.dian-sc-query-inline-filters {
+  margin: 0;
+  padding: 0 14px 6px;
+}
+
+.dian-sc-query-result-num {
+  font-weight: 700;
+  color: #334155;
+  font-variant-numeric: tabular-nums;
+}
+
+.dian-sc-query-min-top .dian-subpage-back {
+  grid-column: 1;
+  justify-self: start;
+}
+
+.dian-sc-query-min-title {
+  grid-column: 2;
+  justify-self: center;
+  margin: 0;
+  max-width: 60vw;
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .dian-subpage-top {
@@ -542,6 +676,12 @@
   grid-column: 1 / -1;
 }
 
+/* 悬浮抽屉内：3 列 × 2 行 — 收藏|备注|联系记录；产品类别|发证机关|手机 */
+.dian-sc-filter-grid--3x2 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px 6px;
+}
+
 .dian-sc-filter-label {
   font-size: 10px;
   font-weight: 600;
@@ -618,12 +758,14 @@
 }
 
 .dian-sc-result-card {
-  background: #fff;
-  border-radius: 16px;
-  border: 1px solid #eef0f3;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border-radius: 18px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
   padding: 36px 20px 40px;
   text-align: center;
-  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.05);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 4px 20px rgba(15, 23, 42, 0.06);
 }
 
 .dian-sc-empty-illus {
@@ -677,10 +819,13 @@
 
 /* 许可证卡片（企业信息卡风格） */
 .dian-sc-license-card {
-  background: #fff;
-  border-radius: 14px;
-  border: 1px solid #e8ecf0;
-  box-shadow: 0 2px 14px rgba(15, 23, 42, 0.06);
+  background: linear-gradient(180deg, #ffffff 0%, #fafbfd 100%);
+  border-radius: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 2px 8px rgba(15, 23, 42, 0.04),
+    0 12px 28px -8px rgba(30, 64, 175, 0.08);
   padding: 14px 12px 12px;
   box-sizing: border-box;
 }
@@ -896,6 +1041,32 @@
 
 .dian-sc-lic-phone:active {
   opacity: 0.88;
+}
+
+.dian-sc-lic-favorite-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  margin: -2px 2px 0 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.95);
+  color: #94a3b8;
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dian-sc-lic-favorite-btn:active {
+  opacity: 0.88;
+}
+
+.dian-sc-lic-favorite-btn--on {
+  color: #f59e0b;
 }
 
 .dian-sc-lic-metrics {
@@ -1308,8 +1479,11 @@
 
 /* SC 详情：跟进记录 */
 .dian-sc-detail-notes {
-  margin-top: 16px;
-  padding-top: 4px;
+  margin-top: 18px;
+  padding: 12px 10px 4px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.65) 0%, rgba(255, 255, 255, 0.4) 100%);
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.75);
 }
 
 .dian-sc-detail-notes-list {
@@ -1414,42 +1588,13 @@
 }
 
 .dian-sc-detail-handle {
-  width: 28px;
-  height: 3px;
+  width: 36px;
+  height: 4px;
   border-radius: 999px;
-  background: #e2e8f0;
-  margin: 5px auto 4px;
+  background: linear-gradient(90deg, #e2e8f0, #cbd5e1 50%, #e2e8f0);
+  margin: 8px auto 6px;
   flex-shrink: 0;
-}
-
-.dian-sc-detail-head {
-  flex-shrink: 0;
-  padding: 0 10px 6px;
-  margin: 0;
-  border-bottom: 1px solid #eef2f6;
-  text-align: center;
-}
-
-.dian-sc-detail-title {
-  margin: 0 0 3px;
-  font-size: 14px;
-  font-weight: 800;
-  color: #0f172a;
-  line-height: 1.2;
-  letter-spacing: -0.02em;
-}
-
-.dian-sc-detail-entity {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 500;
-  color: #64748b;
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  word-break: break-word;
+  box-shadow: 0 1px 2px rgba(255, 255, 255, 0.8) inset;
 }
 
 .dian-sc-detail-scroll {
@@ -1459,7 +1604,7 @@
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
   margin: 0;
-  padding: 4px 8px 2px;
+  padding: 6px 10px 8px;
   scrollbar-width: none;
 }
 
@@ -1468,125 +1613,158 @@
 }
 
 .dian-sc-detail-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  align-items: start;
+}
+
+.dian-sc-detail-field-wrap--full {
+  grid-column: 1 / -1;
 }
 
 .dian-sc-detail-fields .dian-sc-field {
-  gap: 2px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   margin: 0;
-  padding: 6px 8px;
-  background: #fff;
-  border: 1px solid #eef2f6;
-  border-radius: 8px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  padding: 9px 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 12px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 1px 3px rgba(15, 23, 42, 0.04);
+  min-width: 0;
 }
 
 .dian-sc-detail-field-featured .dian-sc-field {
-  border-color: #bfdbfe;
-  background: linear-gradient(135deg, #f0f7ff 0%, #fff 55%);
+  border-color: rgba(147, 197, 253, 0.85);
+  background: linear-gradient(145deg, #eff6ff 0%, #f8fafc 45%, #ffffff 100%);
   box-shadow:
-    0 0 0 1px rgba(59, 130, 246, 0.06),
-    0 2px 10px rgba(37, 99, 235, 0.06);
+    0 0 0 1px rgba(59, 130, 246, 0.1),
+    0 2px 12px rgba(37, 99, 235, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.85) inset;
 }
 
 .dian-sc-detail-field-featured {
   position: relative;
+  min-width: 0;
 }
 
 .dian-sc-detail-field-featured::before {
   content: '';
   position: absolute;
   left: 0;
-  top: 6px;
-  bottom: 6px;
-  width: 2px;
-  border-radius: 0 2px 2px 0;
-  background: linear-gradient(180deg, #3b82f6, #2563eb);
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(180deg, #60a5fa, #2563eb 55%, #1d4ed8);
   pointer-events: none;
+  box-shadow: 0 0 10px rgba(37, 99, 235, 0.35);
 }
 
 .dian-sc-detail-fields .dian-sc-field-label {
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 600;
   color: #64748b;
-  line-height: 1.15;
-  letter-spacing: 0.02em;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
 }
 
 .dian-sc-detail-fields .dian-sc-field-value {
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   color: #0f172a;
-  line-height: 1.35;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .dian-sc-detail-fields .dian-sc-field-mono {
   font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: -0.01em;
-  color: #1e293b;
+  letter-spacing: -0.02em;
+  color: #1e3a5f;
 }
 
 .dian-sc-detail-footer {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 8px;
   margin-top: 0;
-  padding: 6px 8px 0;
-  border-top: 1px solid #f1f5f9;
-  background: #fafbfc;
+  padding: 12px 10px 10px;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, #f1f5f9 100%);
 }
 
 .dian-sc-detail-edit-link {
   width: 100%;
-  padding: 8px 10px;
-  font-size: 13px;
+  padding: 11px 12px;
+  font-size: 14px;
   font-weight: 600;
-  border-radius: 8px;
-  border: 1px solid #93c5fd;
+  border-radius: 12px;
+  border: 1px solid rgba(147, 197, 253, 0.95);
   cursor: pointer;
   font-family: inherit;
-  background: #fff;
+  background: linear-gradient(180deg, #ffffff 0%, #eff6ff 100%);
   color: #1d4ed8;
-  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.06);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 2px 8px rgba(37, 99, 235, 0.1);
   -webkit-tap-highlight-color: transparent;
 }
 
 .dian-sc-detail-edit-link:active {
-  opacity: 0.92;
+  opacity: 0.94;
 }
 
 .dian-sc-detail-close {
   flex-shrink: 0;
   width: 100%;
   margin-top: 0;
-  padding: 8px 10px;
-  font-size: 13px;
+  padding: 10px 12px;
+  font-size: 14px;
   font-weight: 600;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
   cursor: pointer;
   font-family: inherit;
-  background: #f1f5f9;
+  background: #fff;
   color: #475569;
   -webkit-tap-highlight-color: transparent;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .dian-sc-detail-close:active {
-  opacity: 0.9;
-  background: #e2e8f0;
+  opacity: 0.92;
+  background: #f8fafc;
+}
+
+.dian-sc-detail-section {
+  margin: 0;
 }
 
 .dian-sc-detail-section-title {
-  margin: 12px 0 6px;
-  font-size: 12px;
+  margin: 16px 0 8px;
+  padding: 0 2px 0 10px;
+  font-size: 13px;
   font-weight: 700;
-  color: #0f172a;
-  line-height: 1.3;
+  color: #1e293b;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+  border-left: 3px solid #3b82f6;
+}
+
+.dian-sc-detail-section-title--first {
+  margin-top: 2px;
+}
+
+.dian-sc-detail-panel--page .dian-sc-detail-section + .dian-sc-detail-section .dian-sc-detail-fields {
+  margin-top: 0;
 }
 
 .dian-sc-detail-varieties {
@@ -1608,9 +1786,10 @@
   border-collapse: collapse;
   font-size: 10px;
   background: #fff;
-  border: 1px solid #eef2f6;
-  border-radius: 8px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  border-radius: 12px;
   overflow: hidden;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.04);
 }
 
 .dian-sc-varieties-table th,
@@ -1634,6 +1813,28 @@
   font-weight: 500;
   max-width: 200px;
   word-break: break-word;
+}
+
+.dian-sc-varieties-table--detail {
+  font-size: 11px;
+}
+
+.dian-sc-varieties-table--detail th,
+.dian-sc-varieties-table--detail td {
+  padding: 8px 9px;
+  min-width: 3.5em;
+}
+
+.dian-sc-varieties-table--detail th:nth-child(1),
+.dian-sc-varieties-table--detail td:nth-child(1) {
+  min-width: 2.25em;
+  text-align: center;
+}
+
+.dian-sc-varieties-table--detail th:nth-child(5),
+.dian-sc-varieties-table--detail td:nth-child(5) {
+  min-width: 160px;
+  max-width: min(72vw, 280px);
 }
 
 /* —— 大指标卡 —— */
@@ -2181,13 +2382,231 @@
   font-weight: 500;
 }
 
+/* —— 回到顶部（主壳 / 子页） —— */
+.dian-scroll-to-top-fab {
+  position: fixed;
+  z-index: 39;
+  right: max(12px, env(safe-area-inset-right, 0px));
+  bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.96);
+  color: #2563eb;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.9) inset,
+    0 2px 8px rgba(15, 23, 42, 0.08),
+    0 8px 22px -4px rgba(30, 64, 175, 0.18);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dian-scroll-to-top-fab:active {
+  opacity: 0.88;
+  transform: scale(0.96);
+}
+
+.dian-scroll-to-top-fab--above-tabbar {
+  bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+}
+
+.dian-scroll-to-top-fab--align-left {
+  left: max(12px, env(safe-area-inset-left, 0px));
+  right: auto;
+}
+
+/* —— AI 查询占位：顶栏与底栏之间主区域撑满 —— */
+.dian-ai-query-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  width: 100%;
+}
+
+.dian-ai-query-main {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background: #e8ecf1;
+  border-top: 1px solid rgba(15, 23, 42, 0.05);
+}
+
+/* 中间整块：上方可滚对话区 + 底部条，底条始终在 body 内最下方 */
+.dian-ai-query-main-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.dian-ai-query-main-stream {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.dian-ai-query-main-bottom {
+  flex-shrink: 0;
+  min-height: 52px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 255, 255, 0.92);
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
 /* —— 占位页 / 我的 —— */
 .dian-simple-pad {
   padding: 16px 14px 24px;
 }
 
+/* 占位页：参考「推广卡」横向布局（浅粉 / 浅蓝底 + 左白标 + 右文案） */
+.dian-placeholder-hero {
+  margin: 4px 0 18px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: 0.02em;
+  line-height: 1.35;
+}
+
+.dian-simple-pad .dian-card.dian-card--placeholder-spotlight {
+  margin-bottom: 0;
+  border-radius: 18px;
+  padding: 18px 16px 16px;
+  box-shadow:
+    0 4px 24px rgba(15, 23, 42, 0.06),
+    0 1px 0 rgba(255, 255, 255, 0.65) inset;
+}
+
+.dian-simple-pad .dian-card.dian-card--placeholder-spotlight.dian-card--spotlight-rose {
+  background: linear-gradient(145deg, #fff8f8 0%, #ffefef 45%, #ffe8e8 100%);
+  border: 1px solid rgba(255, 192, 192, 0.55);
+}
+
+.dian-simple-pad .dian-card.dian-card--placeholder-spotlight.dian-card--spotlight-slate {
+  background: linear-gradient(145deg, #f8fafc 0%, #f0f9ff 48%, #eff6ff 100%);
+  border: 1px solid rgba(147, 197, 253, 0.5);
+}
+
+.dian-placeholder-spotlight-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.dian-placeholder-spotlight-logo {
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 2px 12px rgba(15, 23, 42, 0.08),
+    0 1px 0 rgba(255, 255, 255, 0.9) inset;
+}
+
+.dian-placeholder-spotlight-logo-m {
+  font-size: 20px;
+  font-weight: 800;
+  color: #ea580c;
+  line-height: 1;
+}
+
+.dian-placeholder-spotlight-logo-sub {
+  font-size: 10px;
+  font-weight: 700;
+  color: #0f172a;
+  margin-top: 3px;
+  letter-spacing: 0.12em;
+}
+
+.dian-placeholder-spotlight-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.dian-placeholder-spotlight-title {
+  margin: 0 0 8px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #0f172a;
+  line-height: 1.35;
+  letter-spacing: 0.02em;
+}
+
+.dian-placeholder-spotlight-desc {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+  color: #475569;
+  line-height: 1.55;
+}
+
+.dian-placeholder-spotlight-list {
+  margin: 10px 0 0;
+  padding-left: 1.15em;
+  font-size: 13px;
+  color: #475569;
+  line-height: 1.55;
+}
+
+.dian-placeholder-spotlight-list li {
+  margin: 0.25em 0;
+}
+
+.dian-placeholder-spotlight-list li::marker {
+  color: #f472b6;
+}
+
+.dian-card--spotlight-slate .dian-placeholder-spotlight-list li::marker {
+  color: #3b82f6;
+}
+
+.dian-placeholder-spotlight-foot {
+  margin: 16px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid rgba(15, 23, 42, 0.07);
+  font-size: 14px;
+  color: #64748b;
+  line-height: 1.55;
+}
+
+.dian-placeholder-spotlight-hint {
+  margin: 12px 0 0;
+  text-align: center;
+  font-size: 13px;
+  color: #94a3b8;
+  line-height: 1.5;
+}
+
+.dian-placeholder-ai-disclaimer {
+  margin: 14px 0 0;
+  text-align: center;
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.45;
+}
+
 .dian-simple-hint {
-  margin: 32px 0 0;
+  margin: 20px 0 0;
   text-align: center;
   font-size: 14px;
   color: #94a3b8;
@@ -2268,4 +2687,332 @@
 
 .dian-logout-btn:active {
   opacity: 0.9;
+}
+
+/* 许可证详情独立页：沿用底部弹层同款 .dian-sc-detail-panel 视觉，仅整页铺满 */
+.dian-sc-detail-page-shell {
+  min-height: 100dvh;
+  min-height: 100vh;
+  background: linear-gradient(165deg, #eef2ff 0%, #f1f5f9 24%, #f8fafc 52%, #ffffff 100%);
+}
+
+.dian-sc-detail-page-shell .dian-subpage-top {
+  align-items: center;
+}
+
+.dian-sc-detail-page-top-row {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  width: 100%;
+}
+
+.dian-sc-detail-page-top-row .dian-subpage-back {
+  grid-column: 1;
+  justify-self: start;
+}
+
+.dian-sc-detail-page-top-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+  color: #0f172a;
+  line-height: 1.25;
+  letter-spacing: 0.03em;
+}
+
+.dian-sc-detail-page-top-row .dian-sc-detail-page-top-title {
+  grid-column: 2;
+}
+
+.dian-sc-detail-favorite-btn {
+  grid-column: 3;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.65);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #94a3b8;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dian-sc-detail-favorite-btn:active {
+  opacity: 0.88;
+}
+
+.dian-sc-detail-favorite-btn--on {
+  color: #f59e0b;
+}
+
+.dian-sc-detail-page-top-spacer {
+  width: 40px;
+  flex-shrink: 0;
+}
+
+.dian-sc-detail-panel.dian-sc-detail-panel--page {
+  flex: 1 1 auto;
+  min-height: 0;
+  width: calc(100% - 24px);
+  max-width: min(400px, calc(100vw - 24px));
+  margin: 10px auto 24px;
+  max-height: none;
+  display: flex;
+  flex-direction: column;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  background: linear-gradient(180deg, #fbfcfe 0%, #ffffff 48%, #fafbfc 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.88) inset,
+    0 2px 6px rgba(15, 23, 42, 0.04),
+    0 18px 44px -14px rgba(30, 64, 175, 0.14);
+}
+
+/* —— SC 查询：悬浮搜索球 + 底部抽屉 —— */
+.dian-sc-filter-datasource-pending {
+  opacity: 0.72;
+  font-size: 0.88em;
+}
+
+.dian-sc-filter-fav-lookup {
+  font-weight: 600;
+  color: #1d4ed8;
+}
+
+.dian-sc-float-ball {
+  position: fixed;
+  z-index: 40;
+  border-radius: 50%;
+  border: none;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(155deg, #3b82f6 0%, #2563eb 45%, #1d4ed8 100%);
+  color: #fff;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.22) inset,
+    0 4px 14px rgba(37, 99, 235, 0.42),
+    0 12px 28px -6px rgba(30, 64, 175, 0.35);
+  cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 已改为结果条下方内嵌搜索筛选，禁用旧悬浮入口与面板 */
+.dian-sc-float-ball,
+.dian-sc-float-sheet-root {
+  display: none !important;
+}
+
+.dian-sc-float-ball-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dian-sc-float-sheet-root {
+  position: fixed;
+  inset: 0;
+  z-index: 41;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.dian-sc-float-sheet-panel {
+  position: fixed;
+  box-sizing: border-box;
+  /* 宽高由内联样式：档位 preset 或拖边自定义（见 ScQueryScreen） */
+  min-width: 260px;
+  min-height: 200px;
+  max-width: calc(100vw - 12px);
+  max-height: calc(100dvh - 24px);
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  /* 外框略透；主体透明感由 scroll 区承担 */
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.42) 0%, rgba(248, 250, 252, 0.38) 100%);
+  -webkit-backdrop-filter: blur(20px) saturate(1.08);
+  backdrop-filter: blur(20px) saturate(1.08);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 22px;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.75) inset,
+    0 6px 28px rgba(15, 23, 42, 0.08),
+    0 20px 50px -12px rgba(30, 64, 175, 0.12);
+  animation: dian-sc-float-sheet-in 0.26s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: 50% 100%;
+}
+
+.dian-sc-float-sheet-resize-n {
+  flex-shrink: 0;
+  height: 12px;
+  margin: 2px 10px 0;
+  border-radius: 6px;
+  touch-action: none;
+  cursor: ns-resize;
+  -webkit-tap-highlight-color: transparent;
+  background: transparent;
+}
+
+.dian-sc-float-sheet-resize-n::after {
+  content: '';
+  display: block;
+  margin: 4px auto 0;
+  width: 28px;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.45);
+}
+
+.dian-sc-float-sheet-resize-n:active {
+  background: rgba(148, 163, 184, 0.12);
+}
+
+.dian-sc-float-sheet-resize-e {
+  position: absolute;
+  top: 48px;
+  right: 0;
+  bottom: 10px;
+  width: 14px;
+  touch-action: none;
+  cursor: ew-resize;
+  -webkit-tap-highlight-color: transparent;
+  border-radius: 10px 0 0 10px;
+  background: linear-gradient(
+    270deg,
+    rgba(148, 163, 184, 0.22) 0%,
+    rgba(148, 163, 184, 0) 100%
+  );
+}
+
+.dian-sc-float-sheet-resize-e:active {
+  background: linear-gradient(
+    270deg,
+    rgba(100, 116, 139, 0.35) 0%,
+    rgba(148, 163, 184, 0.08) 100%
+  );
+}
+
+.dian-sc-float-sheet-chrome {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 8px 10px 4px;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.45);
+  background: rgba(255, 255, 255, 0.28);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  touch-action: none;
+  cursor: grab;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dian-sc-float-sheet-chrome:active {
+  cursor: grabbing;
+}
+
+.dian-sc-float-sheet-chrome-fill {
+  flex: 1;
+  min-height: 32px;
+  min-width: 0;
+}
+
+.dian-sc-float-sheet-close {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 12px;
+  margin: 0;
+  padding: 0;
+  font-size: 22px;
+  line-height: 1;
+  color: #64748b;
+  background: rgba(241, 245, 249, 0.95);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dian-sc-float-sheet-close:active {
+  background: #e2e8f0;
+}
+
+@keyframes dian-sc-float-sheet-in {
+  from {
+    transform: translateY(12px) scale(0.94);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+}
+
+.dian-sc-float-sheet-scroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1;
+  min-height: 0;
+  padding-top: 6px;
+  padding-left: 12px;
+  padding-right: 12px;
+  padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  background: transparent;
+}
+
+/* 浮层滚动区内控件：半透明毛玻璃，与透明底协调 */
+.dian-sc-float-sheet-scroll .dian-sc-search {
+  background: rgba(255, 255, 255, 0.38);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border-color: rgba(255, 255, 255, 0.45);
+}
+
+.dian-sc-float-sheet-scroll .dian-sc-filter-panel--open .dian-sc-filter-grid {
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.36) 0%, rgba(250, 251, 252, 0.42) 100%);
+  border-color: rgba(226, 232, 240, 0.55);
+}
+
+.dian-sc-float-sheet-scroll .dian-sc-filter-select {
+  background-color: rgba(255, 255, 255, 0.32);
+}
+
+.dian-sc-float-sheet-scroll .dian-sc-filter-select:hover,
+.dian-sc-float-sheet-scroll .dian-sc-filter-select:focus {
+  background-color: rgba(255, 255, 255, 0.52);
+}
+
+/* 抽屉内：搜索条独占一行，不再套一层「子页面顶栏」 */
+.dian-sc-filter-drawer-top {
+  padding: 2px 0 10px;
+}
+
+.dian-sc-search.dian-sc-search--drawer {
+  flex: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.dian-sc-filter-bar.dian-sc-filter-bar--drawer {
+  padding-bottom: 8px;
+}
+
+.dian-sc-filter-bar.dian-sc-filter-bar--drawer .dian-sc-filter-datasource {
+  margin-bottom: 8px;
+  font-size: 12px;
+  line-height: 1.45;
 }

@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import ScQueryScreen from './ScQueryScreen'
 
 type Scope = 'all' | 'self'
 type MainTab = 'overview' | 'opportunity' | 'loss'
@@ -87,7 +86,6 @@ function MiniLineChart() {
 
 export default function HomeScreen() {
   const [scope, setScope] = useState<Scope>('all')
-  const [homeLayer, setHomeLayer] = useState<'main' | 'sc-query'>('main')
   const [mainTab, setMainTab] = useState<MainTab>('overview')
   const [ovSub, setOvSub] = useState<OverviewSub>('today')
   const [oppSub, setOppSub] = useState<OppSub>('d7')
@@ -105,12 +103,9 @@ export default function HomeScreen() {
 
   const timeStr = now.toLocaleTimeString('zh-CN', { hour12: false })
 
-  if (homeLayer === 'sc-query') {
-    return <ScQueryScreen onBack={() => setHomeLayer('main')} />
-  }
-
   return (
-    <div className="dian-home-pad">
+    <>
+      <div className="dian-home-pad dian-home-pad--no-app-topbar">
         <div className="dian-scope-bar">
           <div className="dian-scope-tabs" role="tablist" aria-label="数据范围">
             <button type="button" className={scope === 'all' ? 'dian-active' : ''} onClick={() => setScope('all')}>
@@ -146,27 +141,6 @@ export default function HomeScreen() {
               <span>时间进度</span>
               <strong>14.77%</strong>
             </div>
-          </div>
-        </section>
-
-        <section className="dian-home-modules" aria-label="功能模块">
-          <h2 className="dian-home-modules-title">功能模块</h2>
-          <div className="dian-home-modules-grid">
-            <button
-              type="button"
-              className="dian-home-module-tile"
-              onClick={() => setHomeLayer('sc-query')}
-            >
-              <span className="dian-home-module-icon" aria-hidden>
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                  <path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-5-5z" strokeLinejoin="round" />
-                  <path d="M14 3v5h5M9 13h6M9 17h4" strokeLinecap="round" />
-                  <circle cx="15.5" cy="10.5" r="3.5" />
-                  <path d="M17.5 12.5L20 15" strokeLinecap="round" />
-                </svg>
-              </span>
-              <span className="dian-home-module-label">sc查询</span>
-            </button>
           </div>
         </section>
 
@@ -549,6 +523,7 @@ export default function HomeScreen() {
             ) : null}
           </>
         ) : null}
-    </div>
+      </div>
+    </>
   )
 }

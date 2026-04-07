@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { persistLogin } from './authStorage'
 import { loginWithPassword } from './loginApi'
 import './Login.css'
@@ -46,12 +47,50 @@ type LoginViewProps = {
   onLoggedIn: (account: string) => void
 }
 
+function LoginBrandMark({ gradientId }: { gradientId: string }) {
+  return (
+    <svg className="login-brand-svg" viewBox="0 0 88 88" width="88" height="88" aria-hidden>
+      <defs>
+        <linearGradient id={gradientId} x1="0%" y1="100%" x2="0%" y2="0%">
+          <stop offset="0%" stopColor="#ea580c" />
+          <stop offset="50%" stopColor="#f97316" />
+          <stop offset="100%" stopColor="#fdba74" />
+        </linearGradient>
+      </defs>
+      <circle cx="44" cy="44" r="41" fill={`url(#${gradientId})`} />
+      <path
+        d="M44 10 Q 58 14 66 26"
+        fill="none"
+        stroke="#15803d"
+        strokeWidth="2.8"
+        strokeLinecap="round"
+      />
+      <ellipse cx="44" cy="71" rx="16" ry="9" fill="#fb923c" opacity="0.92" />
+      <circle cx="44" cy="45" r="23" fill="#fff" opacity="0.96" />
+      <text
+        x="44"
+        y="51"
+        textAnchor="middle"
+        fontSize="13"
+        fontWeight="700"
+        fill="#c2410c"
+        fontFamily="system-ui, 'PingFang SC', 'Microsoft YaHei', sans-serif"
+      >
+        滇同学
+      </text>
+    </svg>
+  )
+}
+
 export default function LoginView({ onLoggedIn }: LoginViewProps) {
+  const navigate = useNavigate()
+  const gradId = useId().replace(/:/g, '')
   const [account, setAccount] = useState('')
   const [password, setPassword] = useState('')
   const [remember, setRemember] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState(false)
+  const [logoImgOk, setLogoImgOk] = useState(true)
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -70,6 +109,7 @@ export default function LoginView({ onLoggedIn }: LoginViewProps) {
       const { token } = await loginWithPassword(u, password)
       persistLogin(remember, u, token ?? null)
       onLoggedIn(u)
+      navigate('/', { replace: true })
     } catch (err) {
       const msg = err instanceof Error ? err.message : '登录失败'
       setError(msg)
@@ -78,18 +118,41 @@ export default function LoginView({ onLoggedIn }: LoginViewProps) {
     }
   }
 
+  const goBack = () => {
+    if (window.history.length > 1) navigate(-1)
+  }
+
   return (
     <div className="login-screen">
-      <div className="login-card">
+      <header className="login-top-bar">
+        <button type="button" className="login-top-btn" aria-label="返回" onClick={goBack}>
+          <span className="login-top-back-icon" aria-hidden>
+            ‹
+          </span>
+        </button>
+        <button type="button" className="login-top-btn" aria-label="更多">
+          <span className="login-top-more-icon" aria-hidden>
+            ···
+          </span>
+        </button>
+      </header>
+
+      <div className="login-body">
+        <div className="login-card">
         <div className="login-logo-wrap">
           <div className="login-logo">
-            <img
-              src={`${import.meta.env.BASE_URL}dtx-logo.png`}
-              alt="滇同学"
-              width={88}
-              height={88}
-              decoding="async"
-            />
+            {logoImgOk ? (
+              <img
+                src={`${import.meta.env.BASE_URL}dtx-logo.png`}
+                alt="滇同学·智慧中台"
+                width={88}
+                height={88}
+                decoding="async"
+                onError={() => setLogoImgOk(false)}
+              />
+            ) : (
+              <LoginBrandMark gradientId={gradId} />
+            )}
           </div>
         </div>
         <h1 className="login-title">智慧中台</h1>
@@ -148,11 +211,12 @@ export default function LoginView({ onLoggedIn }: LoginViewProps) {
             记住我
           </label>
           <button type="button" className="login-forgot">
-            忘记密码?
+            忘记密码？
           </button>
         </div>
 
         <p className="login-copy">© 2026 滇同学·智慧中台 版权所有</p>
+        </div>
       </div>
     </div>
   )

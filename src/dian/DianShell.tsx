@@ -1,7 +1,10 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import HomeScreen from './HomeScreen'
 import MineScreen from './MineScreen'
+import BusinessScreen from './BusinessScreen'
 import PlaceholderScreen from './PlaceholderScreen'
+import { ScrollToTopFab } from './ScrollToTopFab'
 import './dian-app.css'
 
 export type DianTab = 'home' | 'channel' | 'product' | 'ship' | 'mine'
@@ -59,28 +62,70 @@ function TabIcon({ id, active }: { id: DianTab; active: boolean }) {
 
 const TABS: { id: DianTab; label: string }[] = [
   { id: 'home', label: '首页' },
-  { id: 'channel', label: '渠道' },
-  { id: 'product', label: '商品' },
-  { id: 'ship', label: '发货' },
+  { id: 'channel', label: '数据' },
+  { id: 'product', label: 'AI' },
+  { id: 'ship', label: '业务' },
   { id: 'mine', label: '我的' },
 ]
 
+function initialTabFromSearch(searchParams: URLSearchParams): DianTab {
+  const p = searchParams.get('tab')
+  if (p === 'channel' || p === 'product' || p === 'ship' || p === 'mine') return p
+  return 'home'
+}
+
 export default function DianShell({ displayName, onLogout }: DianShellProps) {
-  const [tab, setTab] = useState<DianTab>('home')
+  const [searchParams] = useSearchParams()
+  const [tab, setTab] = useState<DianTab>(() => initialTabFromSearch(searchParams))
+  const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    // 同步 document.title + meta title，并触发微信 WebView 刷新标题
+    const current = TABS.find((item) => item.id === tab)
+    const title =
+      tab === 'home' || tab === 'mine' ? '滇同学·智慧中台' : (current?.label ?? '滇同学·智慧中台')
+
+    const applyTitle = () => {
+      document.title = title
+      const appMeta = document.querySelector('meta[name="application-name"]')
+      appMeta?.setAttribute('content', title)
+      const appleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]')
+      appleMeta?.setAttribute('content', title)
+    }
+
+    applyTitle()
+    const retryId = window.setTimeout(() => {
+      applyTitle()
+      // 微信 iOS 容器标题刷新兜底
+      const ua = window.navigator.userAgent.toLowerCase()
+      if (ua.includes('micromessenger')) {
+        const iframe = document.createElement('iframe')
+        iframe.style.display = 'none'
+        iframe.src = 'about:blank'
+        const remove = () => {
+          iframe.removeEventListener('load', remove)
+          if (iframe.parentNode) iframe.parentNode.removeChild(iframe)
+        }
+        iframe.addEventListener('load', remove)
+        document.body.appendChild(iframe)
+      }
+    }, 80)
+    return () => window.clearTimeout(retryId)
+  }, [tab])
 
   return (
     <div className="dian-shell">
-      <div className="dian-scroll">
+      <div ref={setScrollRoot} className="dian-scroll">
         {tab === 'home' ? <HomeScreen /> : null}
         {tab === 'channel' ? (
-          <PlaceholderScreen title="渠道" subtitle="店铺与销售渠道表现、流量转化将展示于此，支持渠道分析入口。" />
+          <PlaceholderScreen title="数据" items={['经营数据', '统计报表', '多维分析']} />
         ) : null}
-        {tab === 'product' ? (
-          <PlaceholderScreen title="商品" subtitle="商品列表、库存与动销分析将展示于此。" />
-        ) : null}
-        {tab === 'ship' ? <PlaceholderScreen title="发货" subtitle="发货单、物流跟踪与发货预警将展示于此。" /> : null}
+        {tab === 'product' ? <PlaceholderScreen title="AI" items={[]} /> : null}
+        {tab === 'ship' ? <BusinessScreen /> : null}
         {tab === 'mine' ? <MineScreen displayName={displayName} onLogout={onLogout} /> : null}
       </div>
+
+      <ScrollToTopFab target="element" scrollEl={scrollRoot} variant="aboveTabbar" />
 
       <nav className="dian-tabbar" aria-label="主导航">
         {TABS.map(({ id, label }) => (
