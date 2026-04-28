@@ -3,19 +3,33 @@ import type { LicenseRow } from './scLicenseTypes'
 const PREFIX = 'dian-sc-detail-row:'
 
 export function persistScDetailRowSession(licenseNo: string, row: LicenseRow) {
+  const raw = JSON.stringify(row)
+  const key = PREFIX + licenseNo
   try {
-    sessionStorage.setItem(PREFIX + licenseNo, JSON.stringify(row))
+    sessionStorage.setItem(key, raw)
+  } catch {
+    /* ignore */
+  }
+  try {
+    localStorage.setItem(key, raw)
   } catch {
     /* ignore */
   }
 }
 
 export function loadScDetailRowSession(licenseNo: string): LicenseRow | null {
+  const key = PREFIX + licenseNo
   try {
-    const raw = sessionStorage.getItem(PREFIX + licenseNo)
-    if (!raw) return null
-    return JSON.parse(raw) as LicenseRow
+    const raw = sessionStorage.getItem(key)
+    if (raw) return JSON.parse(raw) as LicenseRow
   } catch {
-    return null
+    /* ignore */
   }
+  try {
+    const raw = localStorage.getItem(key)
+    if (raw) return JSON.parse(raw) as LicenseRow
+  } catch {
+    /* ignore */
+  }
+  return null
 }

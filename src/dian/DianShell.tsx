@@ -68,16 +68,42 @@ const TABS: { id: DianTab; label: string }[] = [
   { id: 'mine', label: '我的' },
 ]
 
-function initialTabFromSearch(searchParams: URLSearchParams): DianTab {
+const DIAN_TAB_STORAGE_KEY = 'dian-shell-tab-v1'
+
+function isDianTab(p: string | null): p is DianTab {
+  return p === 'home' || p === 'channel' || p === 'product' || p === 'ship' || p === 'mine'
+}
+
+/** URL ?tab= 优先；否则用上次 Tab（侧滑从 /sc-query 回到 / 时仍是业务等，而不是总页默认首页） */
+function resolveInitialTab(searchParams: URLSearchParams): DianTab {
   const p = searchParams.get('tab')
-  if (p === 'channel' || p === 'product' || p === 'ship' || p === 'mine') return p
+  if (isDianTab(p)) return p
+  try {
+    const s = sessionStorage.getItem(DIAN_TAB_STORAGE_KEY)
+    if (isDianTab(s)) return s
+  } catch {
+    /* ignore */
+  }
   return 'home'
 }
 
 export default function DianShell({ displayName, onLogout }: DianShellProps) {
   const [searchParams] = useSearchParams()
-  const [tab, setTab] = useState<DianTab>(() => initialTabFromSearch(searchParams))
+  const [tab, setTab] = useState<DianTab>(() => resolveInitialTab(searchParams))
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    const p = searchParams.get('tab')
+    if (isDianTab(p)) setTab(p)
+  }, [searchParams])
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(DIAN_TAB_STORAGE_KEY, tab)
+    } catch {
+      /* ignore */
+    }
+  }, [tab])
 
   useEffect(() => {
     // 同步 document.title + meta title，并触发微信 WebView 刷新标题

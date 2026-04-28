@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
+import { BrowserRouter, HashRouter, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import LoginView from './LoginView'
 import DianShell from './dian/DianShell'
 import ScQueryScreen from './dian/ScQueryScreen'
@@ -14,6 +14,18 @@ function routerBasename(): string | undefined {
   const raw = import.meta.env.BASE_URL
   if (raw === '/' || raw === '') return undefined
   return raw.replace(/\/$/, '') || undefined
+}
+
+/** 为 true 时使用 Hash 路由，避免 /mobile/sc-query/... 深层路径刷新被网关回退到 PC 站 index */
+function useHashRouterFromEnv(): boolean {
+  const v = import.meta.env.VITE_HASH_ROUTER?.trim().toLowerCase()
+  return v === 'true' || v === '1' || v === 'yes'
+}
+
+/** Hash 模式不传 basename：子路径 basename 与 HashRouter 在部分 WebView 下组合会导致匹配失败白屏；JS/CSS 仍由 Vite `base` 决定。 */
+function routerBasenameForRouter(useHash: boolean): string | undefined {
+  if (useHash) return undefined
+  return routerBasename()
 }
 
 /** 开发/演示：跳过账号校验（VITE_SKIP_LOGIN=true；dev 默认见 vite.config） */
@@ -32,7 +44,11 @@ function ScQueryPage() {
 
 function ScLicenseDetailRoute() {
   const navigate = useNavigate()
-  return <ScLicenseDetailPage onBack={() => void navigate('/sc-query')} />
+  const onBack = () => {
+    // 手机 WebView 中 -1 可能回到外部（如网页版智慧中台）；详情返回固定回站内列表
+    void navigate('/sc-query', { replace: true })
+  }
+  return <ScLicenseDetailPage onBack={onBack} />
 }
 
 export default function App() {
@@ -67,8 +83,11 @@ export default function App() {
     />
   )
 
+  const useHash = useHashRouterFromEnv()
+  const Router = useHash ? HashRouter : BrowserRouter
+
   return (
-    <BrowserRouter basename={routerBasename()}>
+    <Router basename={routerBasenameForRouter(useHash)}>
       <Routes>
         <Route
           path="/login"
@@ -93,6 +112,6 @@ export default function App() {
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </BrowserRouter>
+    </Router>
   )
 }

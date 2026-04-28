@@ -1,3 +1,4 @@
+import { isNullishLiteralString } from '../utils/apiStringNormalize'
 import type { FoodVarietyRow, LicenseDetailDb } from './licenseDetailModel'
 import type { LicenseRow } from './scLicenseTypes'
 
@@ -17,7 +18,11 @@ function pickStr(r: Record<string, unknown>, ...keys: string[]): string {
   for (const k of keys) {
     const v = r[k]
     if (v == null) continue
-    if (typeof v === 'string' && v.trim()) return v.trim()
+    if (typeof v === 'string') {
+      const t = v.trim()
+      if (!t || isNullishLiteralString(t)) continue
+      return t
+    }
     if (typeof v === 'number' || typeof v === 'boolean') return String(v)
   }
   return ''
@@ -77,6 +82,16 @@ function defaultPageSize(): number {
   return Number.isFinite(n) && n > 0 ? Math.min(n, 500) : 100
 }
 
+function coalesceListFromUnknown(data: unknown): unknown[] {
+  if (Array.isArray(data)) return data
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    const inner = data as Record<string, unknown>
+    const nested = inner.list ?? inner.rows ?? inner.items ?? inner.records ?? inner.data
+    if (Array.isArray(nested)) return nested
+  }
+  return []
+}
+
 function unwrapEnterpriseList(body: unknown): {
   list: unknown[]
   total: number
@@ -88,12 +103,25 @@ function unwrapEnterpriseList(body: unknown): {
     return { list: [], total: 0, page: 1, pageSize: defaultPageSize() }
   }
   const o = body as Record<string, unknown>
-  const data = o.data
-  const list = Array.isArray(data) ? data : []
-  const total = typeof o.total === 'number' ? o.total : Number(o.total) || list.length
-  const page = typeof o.page === 'number' ? o.page : Number(o.page) || 1
-  const pageSize = typeof o.pageSize === 'number' ? o.pageSize : Number(o.pageSize) || defaultPageSize()
-  const dataSource = typeof o.dataSource === 'string' ? o.dataSource : undefined
+  let list = coalesceListFromUnknown(o.data)
+  if (list.length === 0 && Array.isArray(o.list)) list = o.list as unknown[]
+  if (list.length === 0 && Array.isArray(o.rows)) list = o.rows as unknown[]
+
+  const innerMeta =
+    o.data && typeof o.data === 'object' && !Array.isArray(o.data) ? (o.data as Record<string, unknown>) : null
+  const totalRaw = o.total ?? innerMeta?.total
+  const pageRaw = o.page ?? innerMeta?.page
+  const pageSizeRaw = o.pageSize ?? innerMeta?.pageSize
+
+  const total = typeof totalRaw === 'number' ? totalRaw : Number(totalRaw) || list.length
+  const page = typeof pageRaw === 'number' ? pageRaw : Number(pageRaw) || 1
+  const pageSize = typeof pageSizeRaw === 'number' ? pageSizeRaw : Number(pageSizeRaw) || defaultPageSize()
+  let dataSource = typeof o.dataSource === 'string' ? o.dataSource.trim() : undefined
+  if (dataSource && isNullishLiteralString(dataSource)) dataSource = undefined
+  if (!dataSource && innerMeta && typeof innerMeta.dataSource === 'string') {
+    const ds = innerMeta.dataSource.trim()
+    dataSource = ds && !isNullishLiteralString(ds) ? ds : undefined
+  }
   return { list, total, page, pageSize, dataSource }
 }
 
@@ -129,7 +157,9 @@ function recordToDetailDb(r: Record<string, unknown>): LicenseDetailDb {
   const set = (key: keyof LicenseDetailDb, v: unknown) => {
     if (v == null) return
     if (typeof v === 'string' && v.trim()) {
-      out[key] = v.trim()
+      const t = v.trim()
+      if (isNullishLiteralString(t)) return
+      out[key] = t
       return
     }
     if (typeof v === 'number' || typeof v === 'boolean') {
@@ -364,6 +394,27 @@ export function mapScQueryRecordToLicenseRow(raw: unknown): LicenseRow | null {
   }
 }
 
+function mapNetworkFetchError(e: unknown): Error {
+  const msg = e instanceof Error ? e.message : String(e)
+  const lower = msg.toLowerCase()
+  if (
+    msg === 'Failed to fetch' ||
+    lower.includes('networkerror') ||
+    lower.includes('network request failed') ||
+    lower.includes('load failed') ||
+    lower.includes('failed to fetch')
+  ) {
+    return new Error(
+      '无法连接中台接口（网络中断、HTTPS 证书、跨域或 API 地址不可达）。请检查网络、VITE_API_BASE_URL 及网关/代理配置。',
+    )
+  }
+  return e instanceof Error ? e : new Error(msg)
+}
+
+const scQueryFetchInit: RequestInit = {
+  headers: { Accept: 'application/json' },
+}
+
 async function parseJsonError(res: Response): Promise<string> {
   try {
     const body: unknown = await res.json()
@@ -394,10 +445,12 @@ export async function fetchScEnterpriseList(
   }
   const url = appendQuery(base, q)
 
-  const res = await fetch(url, {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-  })
+  let res: Response
+  try {
+    res = await fetch(url, { ...scQueryFetchInit, method: 'GET' })
+  } catch (e) {
+    throw mapNetworkFetchError(e)
+  }
 
   if (!res.ok) {
     throw new Error(await parseJsonError(res))
@@ -419,28 +472,61 @@ export async function fetchScLicenseRowsFromApi(): Promise<LicenseRow[]> {
   return rows
 }
 
+/** 按许可证编号拉一条（用于详情页直开/刷新，与列表 searchText 一致） */
+export async function fetchScLicenseRowByLicenseNo(licenseNo: string): Promise<LicenseRow | null> {
+  const t = licenseNo.trim()
+  if (!t) return null
+  if (!getScQueryPrefixUrl()) return null
+  try {
+    const { rows } = await fetchScEnterpriseList({
+      searchText: t,
+      page: 1,
+      pageSize: 50,
+    })
+    const exact = rows.find((r) => r.licenseNo === t)
+    if (exact) return exact
+    return rows.length === 1 ? rows[0]! : null
+  } catch {
+    return null
+  }
+}
+
 /** GET /api/scquery/categories → string[] */
 export async function fetchScQueryCategories(): Promise<string[]> {
   const p = getScQueryPrefixUrl()
   if (!p) throw new Error('未配置 API')
-  const res = await fetch(`${p.replace(/\/+$/, '')}/categories`, {
-    headers: { Accept: 'application/json' },
-  })
+  let res: Response
+  try {
+    res = await fetch(`${p.replace(/\/+$/, '')}/categories`, { ...scQueryFetchInit, method: 'GET' })
+  } catch (e) {
+    throw mapNetworkFetchError(e)
+  }
   if (!res.ok) throw new Error(`categories ${res.status}`)
   const body: unknown = await res.json()
-  return Array.isArray(body) ? (body as string[]).filter((x) => typeof x === 'string') : []
+  if (!Array.isArray(body)) return []
+  return (body as unknown[])
+    .filter((x): x is string => typeof x === 'string')
+    .map((x) => x.trim())
+    .filter((x) => x.length > 0 && !isNullishLiteralString(x))
 }
 
 /** GET /api/scquery/authorities → string[] */
 export async function fetchScQueryAuthorities(): Promise<string[]> {
   const p = getScQueryPrefixUrl()
   if (!p) throw new Error('未配置 API')
-  const res = await fetch(`${p.replace(/\/+$/, '')}/authorities`, {
-    headers: { Accept: 'application/json' },
-  })
+  let res: Response
+  try {
+    res = await fetch(`${p.replace(/\/+$/, '')}/authorities`, { ...scQueryFetchInit, method: 'GET' })
+  } catch (e) {
+    throw mapNetworkFetchError(e)
+  }
   if (!res.ok) throw new Error(`authorities ${res.status}`)
   const body: unknown = await res.json()
-  return Array.isArray(body) ? (body as string[]).filter((x) => typeof x === 'string') : []
+  if (!Array.isArray(body)) return []
+  return (body as unknown[])
+    .filter((x): x is string => typeof x === 'string')
+    .map((x) => x.trim())
+    .filter((x) => x.length > 0 && !isNullishLiteralString(x))
 }
 
 /** 把页面上的筛选枚举映射为接口 Query */

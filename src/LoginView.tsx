@@ -2,6 +2,7 @@ import { useId, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { persistLogin } from './authStorage'
 import { loginWithPassword } from './loginApi'
+import { withBackTap } from './backTapFeedback'
 import './Login.css'
 
 function UserFieldIcon() {
@@ -119,7 +120,25 @@ export default function LoginView({ onLoggedIn }: LoginViewProps) {
   }
 
   const goBack = () => {
-    if (window.history.length > 1) navigate(-1)
+    withBackTap(() => {
+      // 直达登录页时 history 可能只有 1，原先不调用 navigate 会「无法退出」
+      if (window.history.length > 1) {
+        void navigate(-1)
+        return
+      }
+      const ref = document.referrer
+      if (ref) {
+        try {
+          if (new URL(ref).origin === window.location.origin) {
+            window.location.assign(ref)
+            return
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      window.history.back()
+    })
   }
 
   return (

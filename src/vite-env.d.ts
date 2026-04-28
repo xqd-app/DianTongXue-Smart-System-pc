@@ -33,6 +33,11 @@ interface ImportMetaEnv {
   readonly VITE_SKIP_LOGIN?: string
   /** 跳过登录时顶栏展示名，默认「访客」 */
   readonly VITE_SKIP_LOGIN_DISPLAY?: string
+  /**
+   * 为 true/1/yes 时使用 HashRouter（如 https://域名/mobile/#/sc-query/detail/…），
+   * 避免深层路径刷新时服务端未配置 SPA 回退而落到 PC 端首页。
+   */
+  readonly VITE_HASH_ROUTER?: string
 }
 
 interface ImportMeta {

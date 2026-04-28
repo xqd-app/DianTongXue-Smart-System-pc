@@ -1,3 +1,5 @@
+import { normalizeApiDisplayString } from '../utils/apiStringNormalize'
+
 /** 许可证 / 企业库字段（与接口字段对应，均为可选） */
 export type LicenseDetailDb = Partial<{
   xkzbh: string
@@ -82,7 +84,7 @@ export type DetailSection = {
 }
 
 function dash(s: string): string {
-  const t = s.trim()
+  const t = normalizeApiDisplayString(s)
   if (!t || t === '-') return '—'
   return t
 }
@@ -97,7 +99,9 @@ function formatContactStatusRaw(raw: string): string {
 function pickStrObj(o: Record<string, unknown>, ...keys: string[]): string {
   for (const k of keys) {
     const v = o[k]
-    if (v != null && String(v).trim()) return String(v).trim()
+    if (v == null) continue
+    const t = normalizeApiDisplayString(String(v))
+    if (t) return t
   }
   return ''
 }
@@ -159,7 +163,7 @@ type RowLite = {
 }
 
 const SEC = {
-  license: '许可证与生产',
+  license: '许可证信息',
   apply: '申请与编码',
   system: '系统与同步',
   enterprise: '工商登记',
@@ -223,20 +227,6 @@ const SPEC: Array<{
 
   {
     section: SEC.system,
-    label: 'contactAt',
-    mono: true,
-    skipIfDash: true,
-    get: (_r, d) => d.contactAt ?? '',
-  },
-  {
-    section: SEC.system,
-    label: 'contactPhone',
-    mono: true,
-    skipIfDash: true,
-    get: (_r, d) => d.contactPhone ?? '',
-  },
-  {
-    section: SEC.system,
     label: 'contactStatus（库）',
     get: (_r, d) => formatContactStatusRaw(d.contactStatusRaw ?? ''),
   },
@@ -247,17 +237,20 @@ const SPEC: Array<{
     skipIfDash: true,
     get: (_r, d) => d.notes ?? '',
   },
-  {
-    section: SEC.system,
-    label: 'updated_at',
-    mono: true,
-    skipIfDash: true,
-    get: (_r, d) => d.updatedAt ?? '',
-  },
   { section: SEC.system, label: 'id', mono: true, skipIfDash: true, get: (_r, d) => d.apiId ?? '' },
 
   { section: SEC.enterprise, label: '企业名称', get: (r, d) => d.jyzmc ?? r.companyName },
-  { section: SEC.enterprise, label: '参保人数', skipIfDash: true, get: (_r, d) => d.insuredCount ?? '' },
+  {
+    section: SEC.enterprise,
+    label: '参保人数',
+    skipIfDash: true,
+    get: (_r, d) => {
+      const v = (d.insuredCount ?? '').trim()
+      if (!v) return ''
+      if (/^\d+$/.test(v)) return `${v}人`
+      return v
+    },
+  },
   { section: SEC.enterprise, label: '曾用名', skipIfDash: true, get: (_r, d) => d.formerName ?? '' },
   { section: SEC.enterprise, label: '成立日期', skipIfDash: true, get: (_r, d) => d.establishDate ?? '' },
   { section: SEC.enterprise, label: '电话', mono: true, skipIfDash: true, get: (_r, d) => d.enterprisePhone ?? '' },
@@ -358,9 +351,21 @@ const SECTION_ORDER = [SEC.license, SEC.apply, SEC.system, SEC.enterprise, SEC.c
 
 const COMPACT_SECTION_TITLE = '许可证信息'
 
-export function buildLicenseDetailSections(row: RowLite & { db?: LicenseDetailDb }): DetailSection[] {
+export type BuildLicenseDetailOptions = {
+  /**
+   * 详情页：按固定模板输出全部分组与字段，无值显示「—」，与中台完整字段清单一致。
+   * 列表卡片等紧凑场景勿开。
+   */
+  showAllTemplateFields?: boolean
+}
+
+export function buildLicenseDetailSections(
+  row: RowLite & { db?: LicenseDetailDb },
+  options?: BuildLicenseDetailOptions,
+): DetailSection[] {
   const db = row.db ?? {}
-  const full = Object.keys(db).length > 0
+  const showAllTemplate = options?.showAllTemplateFields === true
+  const full = showAllTemplate || Object.keys(db).length > 0
   const map = new Map<string, DetailLine[]>()
   const push = (sectionTitle: string, line: DetailLine) => {
     const list = map.get(sectionTitle)
@@ -372,7 +377,7 @@ export function buildLicenseDetailSections(row: RowLite & { db?: LicenseDetailDb
     if (!full && !COMPACT_DETAIL_LABELS.has(s.label)) continue
     const raw = s.get(row, db)
     const value = dash(raw)
-    if (full && value === '—' && s.skipIfDash) continue
+    if (full && value === '—' && s.skipIfDash && !showAllTemplate) continue
     const line: DetailLine = {
       label: s.label,
       value,
@@ -384,13 +389,12 @@ export function buildLicenseDetailSections(row: RowLite & { db?: LicenseDetailDb
     push(title, line)
   }
 
-  if (row.phone.trim()) {
-    const title = full ? SEC.contact : COMPACT_SECTION_TITLE
-    push(title, { label: '本页联系电话（可编辑）', value: dash(row.phone), mono: true })
+  const contactTitle = full ? SEC.contact : COMPACT_SECTION_TITLE
+  if (showAllTemplate || row.phone.trim()) {
+    push(contactTitle, { label: '本页联系电话（可编辑）', value: dash(row.phone), mono: true })
   }
-  if (row.remark.trim()) {
-    const title = full ? SEC.contact : COMPACT_SECTION_TITLE
-    push(title, { label: '本页备注（可编辑）', value: dash(row.remark) })
+  if (showAllTemplate || row.remark.trim()) {
+    push(contactTitle, { label: '本页备注（可编辑）', value: dash(row.remark), fullRow: true })
   }
 
   const out: DetailSection[] = []

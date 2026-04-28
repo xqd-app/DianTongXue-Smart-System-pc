@@ -40,6 +40,8 @@ export default defineConfig(({ mode }) => {
       cssTarget: 'chrome61',
     },
     server: {
+      // 监听所有网卡，手机同一 Wi‑Fi 下可用 http://本机局域网IP:5173/mobile/ 访问
+      host: true,
       proxy: {
         // 设置 VITE_API_BASE_URL=/api 或 VITE_SCQUERY_API_BASE=/api/scquery 时，将 /api 转发到中台（端口按本机修改）
         '/api': {

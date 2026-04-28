@@ -1,4 +1,5 @@
 import type { RefObject, ReactNode } from 'react'
+import { withBackTap } from '../backTapFeedback'
 
 export type ScPhoneFilter = 'all' | 'has' | 'none'
 export type ScRemarkFilter = 'all' | 'has' | 'none'
@@ -17,6 +18,8 @@ type ScQuerySearchFiltersProps = {
   clearSearchOnDoubleClick: () => void
   SearchIcon: () => ReactNode
   dataSourceLine: ReactNode
+  onSearchFocus?: () => void
+  onSearchBlur?: () => void
   filterPanelOpen: boolean
   setFilterPanelOpen: (v: boolean | ((p: boolean) => boolean)) => void
   filterFood: string
@@ -35,6 +38,8 @@ type ScQuerySearchFiltersProps = {
   foodOptions: string[]
   authorityOptions: string[]
   setPage: (v: number | ((p: number) => number)) => void
+  onResetDefaults: () => void
+  onBatchShare?: () => void
 }
 
 export default function ScQuerySearchFilters({
@@ -47,6 +52,8 @@ export default function ScQuerySearchFilters({
   searchInputRef,
   clearSearchOnDoubleClick,
   SearchIcon,
+  onSearchFocus,
+  onSearchBlur,
   filterPanelOpen,
   setFilterPanelOpen,
   filterFood,
@@ -65,6 +72,8 @@ export default function ScQuerySearchFilters({
   foodOptions,
   authorityOptions,
   setPage,
+  onResetDefaults,
+  onBatchShare,
 }: ScQuerySearchFiltersProps) {
   const gridId = `dian-sc-filter-grid${idSuffix}`
   const toggleId = `dian-sc-filter-toggle${idSuffix}`
@@ -82,13 +91,16 @@ export default function ScQuerySearchFilters({
       </span>
       <input
         ref={searchInputRef}
-        type="search"
+        type="text"
+        inputMode="search"
         className="dian-sc-search-input"
-            placeholder="企业名称、许可证号（可查本地是否收藏）等"
+        placeholder="企业名称、许可证号（可查本地是否收藏）等"
         enterKeyHint="search"
         autoComplete="off"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
+        onFocus={() => onSearchFocus?.()}
+        onBlur={() => onSearchBlur?.()}
       />
     </div>
   )
@@ -100,7 +112,14 @@ export default function ScQuerySearchFilters({
       ) : (
         <header className="dian-subpage-top">
           {!hideBack && onBack ? (
-            <button type="button" className="dian-subpage-back" onClick={onBack} aria-label="返回">
+            <button
+              type="button"
+              className="dian-subpage-back"
+              onClick={() => {
+                if (onBack) withBackTap(onBack)
+              }}
+              aria-label="返回"
+            >
               <span className="dian-subpage-back-icon" aria-hidden>
                 ‹
               </span>
@@ -140,9 +159,54 @@ export default function ScQuerySearchFilters({
               </span>
               <span className="dian-sc-filter-head-hint">{filterPanelOpen ? '轻触收起' : '轻触展开'}</span>
             </span>
-            <span className="dian-sc-filter-chevron" aria-hidden>
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M9 6l6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
+            <span
+              className="dian-sc-filter-reset-mini"
+              role="button"
+              tabIndex={0}
+              aria-label="一键恢复默认筛选"
+              title="恢复默认"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                onResetDefaults()
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onResetDefaults()
+                }
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
+                <path d="M3 12a9 9 0 1 0 2.64-6.36" strokeLinecap="round" />
+                <path d="M3 4v5h5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+            <span
+              className="dian-sc-filter-share-mini"
+              role="button"
+              tabIndex={0}
+              aria-label="批量选择分享：单击进入多选，选好后再次单击复制到剪贴板并退出"
+              title="批量分享"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                onBatchShare?.()
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onBatchShare?.()
+                }
+              }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" aria-hidden>
+                <circle cx="18" cy="5" r="2.5" />
+                <circle cx="6" cy="12" r="2.5" />
+                <circle cx="18" cy="19" r="2.5" />
+                <path d="M8.3 11l7.4-4.2M8.3 13l7.4 4.2" strokeLinecap="round" />
               </svg>
             </span>
           </button>

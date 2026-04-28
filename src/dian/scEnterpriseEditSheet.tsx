@@ -5,6 +5,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from 'react'
+import { withBackTap } from '../backTapFeedback'
 import type { EnterpriseNoteEntry } from './scEnterpriseNoteTypes'
 import { fileToDataUrl, formatNoteSavedAt, MAX_NOTE_IMAGES } from './scEnterpriseEditUtils'
 
@@ -77,7 +78,12 @@ export function ScEnterpriseEditSheet({
 
   return (
     <div className="dian-sc-edit-root" role="presentation">
-      <button type="button" className="dian-sc-edit-backdrop" aria-label="关闭" onClick={onCancel} />
+      <button
+        type="button"
+        className="dian-sc-edit-backdrop"
+        aria-label="关闭"
+        onClick={() => withBackTap(onCancel)}
+      />
       <div
         className="dian-sc-edit-panel dian-sc-edit-panel--wide"
         role="dialog"
@@ -168,7 +174,12 @@ export function ScEnterpriseEditSheet({
         ) : null}
 
         <div className="dian-sc-edit-actions">
-          <button type="button" className="dian-sc-edit-btn dian-sc-edit-btn-cancel" onClick={onCancel} disabled={saving}>
+          <button
+            type="button"
+            className="dian-sc-edit-btn dian-sc-edit-btn-cancel"
+            onClick={() => withBackTap(onCancel)}
+            disabled={saving}
+          >
             取消
           </button>
           <button type="button" className="dian-sc-edit-btn dian-sc-edit-btn-save" onClick={onSave} disabled={saving}>

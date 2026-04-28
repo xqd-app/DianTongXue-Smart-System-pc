@@ -5,7 +5,7 @@
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <meta
       name="viewport"
-      content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content"
+      content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content"
     />
     <meta name="theme-color" content="#ffffff" />
     <meta name="application-name" content="滇同学·智慧中台" />
@@ -13,7 +13,28 @@
     <title>滇同学·智慧中台</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- 生产构建会保留此处；若主 JS 未加载（常见：/mobile/assets/*.js 被 404 或回退成 HTML），用户仍能看到提示 -->
+      <div
+        id="static-boot-hint"
+        style="
+          box-sizing: border-box;
+          width: min(100%, 420px);
+          margin: 0 auto;
+          padding: 24px 16px;
+          font-family: system-ui, 'PingFang SC', sans-serif;
+          color: #0f172a;
+          text-align: center;
+        "
+      >
+        <p style="margin: 0 0 10px; font-size: 15px">正在加载应用…</p>
+        <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #64748b">
+          若长时间白屏，请在开发者工具 Network 查看 <code>/mobile/assets/</code> 下 JS/CSS 是否
+          <strong>200</strong>。若为 404 或类型为 document（被当成网页返回），需调整 Nginx：静态文件优先，勿用整站 SPA 回退盖住
+          <code>/mobile/assets/</code>。
+        </p>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
